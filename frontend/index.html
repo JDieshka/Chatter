@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MIN</title>
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+<!-- ===== AUTH PAGE ===== -->
+<div class="page-view active" id="page-auth">
+  <div class="auth-container">
+    <div class="auth-logo">MIN</div>
+    <div class="auth-tabs">
+      <button class="auth-tab active-login" id="tab-login" onclick="switchAuthTab('login')">Вход</button>
+      <button class="auth-tab" id="tab-register" onclick="switchAuthTab('register')">Регистрация</button>
+    </div>
+
+    <!-- Login Form -->
+    <form class="auth-form" id="form-login" onsubmit="return false;">
+      <span class="form-label">никнейм/логин</span>
+      <input type="text" class="form-input" id="login-username" autocomplete="username">
+      <span class="form-label">пароль</span>
+      <input type="password" class="form-input" id="login-password" autocomplete="current-password">
+      <button class="auth-btn" onclick="doLogin()">войти</button>
+      <div class="form-error" id="login-error"></div>
+    </form>
+
+    <!-- Register Form -->
+    <form class="auth-form hidden" id="form-register" onsubmit="return false;">
+      <span class="form-label">никнейм</span>
+      <input type="text" class="form-input" id="reg-username" autocomplete="username">
+      <span class="form-label">email</span>
+      <input type="email" class="form-input" id="reg-email" autocomplete="email">
+      <span class="form-label">пароль</span>
+      <input type="password" class="form-input" id="reg-password" autocomplete="new-password">
+      <span class="form-label">повторите пароль</span>
+      <input type="password" class="form-input" id="reg-password2" autocomplete="new-password">
+      <button class="auth-btn" onclick="doRegister()">зарегистрироваться</button>
+      <div class="form-error" id="register-error"></div>
+    </form>
+  </div>
+</div>
+
+<!-- ===== APP - CHATS PAGE ===== -->
+<div class="page-view" id="page-app" style="flex-direction:column;">
+  <div class="app-container" style="min-height:700px;">
+    <div class="app-header">
+      <div class="header-logo">MIN</div>
+      <div class="header-nav">
+        <a onclick="showPage('about')">о нас</a>
+        <a onclick="showPage('settings')">настройки</a>
+        <a onclick="doLogout()">выход</a>
+      </div>
+      <div class="header-profile" onclick="showPage('profile')">
+        <div class="header-profile-info">
+          профиль<br>
+          <span style="color:var(--pink)" id="hdr-nickname">#никнейм</span>
+        </div>
+        <div class="header-profile-avatar" id="hdr-avatar"></div>
+      </div>
+    </div>
+
+    <div class="tab-bar">
+      <button class="tab-btn active-cyan" id="app-tab-chats" onclick="switchAppTab('chats')">ЧАТЫ</button>
+      <button class="tab-btn" id="app-tab-voice" onclick="switchAppTab('voice')">ГОЛОСОВЫЕ ЧАТЫ</button>
+    </div>
+
+    <div class="main-content">
+      <!-- Chats View -->
+      <div id="view-chats" style="display:flex;flex:1;">
+        <div class="chat-sidebar">
+          <div class="chat-list" id="chat-list"><!-- заполняется из API --></div>
+          <div class="sidebar-footer">
+            <button class="add-btn" onclick="openModal('add-channel')">
+              Добавить <span class="plus">+</span>
+            </button>
+          </div>
+        </div>
+
+        <div class="chat-area">
+          <div class="chat-title" id="chat-title">Выберите чат</div>
+          <div class="chat-messages" id="chat-messages"></div>
+          <div class="chat-input-area">
+            <input type="text" class="chat-input" id="msg-input" placeholder="Написать сообщение..." disabled>
+            <div class="chat-input-icons">
+              <button class="icon-btn" onclick="sendCurrentMessage()">➤</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Voice Chats View (в разработке) -->
+      <div id="view-voice" style="display:none;flex:1;">
+        <div class="voice-placeholder">
+          <div class="voice-placeholder-title">ГОЛОСОВЫЕ ЧАТЫ</div>
+          <p>Раздел находится в разработке.<br>Текстовые чаты и real-time сообщения уже доступны во вкладке «ЧАТЫ».</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ===== PROFILE PAGE ===== -->
+<div class="page-view" id="page-profile" style="flex-direction:column;align-items:center;">
+  <div class="app-container" style="max-width:700px;">
+    <div class="app-header">
+      <div class="header-logo">MIN</div>
+      <div class="header-nav">
+        <a onclick="showPage('about')">о нас</a>
+        <a onclick="showPage('settings')">настройки</a>
+        <a onclick="showPage('app')">чаты</a>
+      </div>
+      <div class="header-profile" onclick="showPage('profile')">
+        <div class="header-profile-info">
+          профиль<br>
+          <span style="color:var(--pink)" id="prof-hdr-nickname">#никнейм</span>
+        </div>
+        <div class="header-profile-avatar" id="prof-hdr-avatar"></div>
+      </div>
+    </div>
+    <div style="padding:30px;">
+      <div class="profile-header-section">
+        <div class="profile-avatar-large" id="profile-avatar"></div>
+        <div class="profile-details">
+          <h2 id="profile-name">—</h2>
+          <div class="nickname" id="profile-nick">—</div>
+        </div>
+      </div>
+      <div class="profile-form">
+        <div class="form-group">
+          <label>Никнейм</label>
+          <input type="text" id="profile-username" readonly>
+        </div>
+        <div class="form-group">
+          <label>Email</label>
+          <input type="email" id="profile-email" readonly placeholder="не указан">
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ===== ABOUT PAGE ===== -->
+<div class="page-view" id="page-about" style="flex-direction:column;align-items:center;">
+  <div class="app-container" style="max-width:700px;">
+    <div class="app-header">
+      <div class="header-logo">MIN</div>
+      <div class="header-nav">
+        <a onclick="showPage('about')">о нас</a>
+        <a onclick="showPage('settings')">настройки</a>
+        <a onclick="showPage('app')">чаты</a>
+      </div>
+      <div class="header-profile" onclick="showPage('profile')">
+        <div class="header-profile-info">
+          профиль<br>
+          <span style="color:var(--pink)" id="about-hdr-nickname">#никнейм</span>
+        </div>
+        <div class="header-profile-avatar" id="about-hdr-avatar"></div>
+      </div>
+    </div>
+    <div style="padding:40px;text-align:center;">
+      <div class="auth-logo" style="font-size:48px;margin-bottom:20px;">MIN</div>
+      <p style="font-size:16px;line-height:1.8;color:#444;max-width:500px;margin:0 auto;">
+        MIN — это платформа для общения в текстовых чатах в реальном времени.
+        Создавайте приватные и групповые чаты, приглашайте друзей и переписывайтесь.
+      </p>
+      <div style="margin-top:30px;display:flex;gap:16px;justify-content:center;">
+        <div style="width:60px;height:60px;background:var(--cyan);border:3px solid var(--border);border-radius:10px;"></div>
+        <div style="width:60px;height:60px;background:var(--pink);border:3px solid var(--border);border-radius:10px;"></div>
+        <div style="width:60px;height:60px;background:var(--gray);border:3px solid var(--border);border-radius:10px;"></div>
+        <div style="width:60px;height:60px;background:var(--purple);border:3px solid var(--border);border-radius:10px;"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ===== SETTINGS PAGE ===== -->
+<div class="page-view" id="page-settings" style="flex-direction:column;align-items:center;">
+  <div class="app-container" style="max-width:700px;">
+    <div class="app-header">
+      <div class="header-logo">MIN</div>
+      <div class="header-nav">
+        <a onclick="showPage('about')">о нас</a>
+        <a onclick="showPage('settings')">настройки</a>
+        <a onclick="showPage('app')">чаты</a>
+      </div>
+      <div class="header-profile" onclick="showPage('profile')">
+        <div class="header-profile-info">
+          профиль<br>
+          <span style="color:var(--pink)" id="set-hdr-nickname">#никнейм</span>
+        </div>
+        <div class="header-profile-avatar" id="set-hdr-avatar"></div>
+      </div>
+    </div>
+    <div style="padding:30px;">
+      <h2 style="font-family:'Press Start 2P',monospace;font-size:16px;margin-bottom:24px;">настройки</h2>
+      <p style="color:#666;font-size:14px;line-height:1.6;">
+        Пользовательские настройки пока не поддерживаются сервером — этот раздел появится позже.
+      </p>
+      <button class="profile-save-btn" onclick="showPage('app')">Назад к чатам</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===== MODAL: новый чат ===== -->
+<div class="modal-overlay" id="modal-add-channel">
+  <div class="modal">
+    <div class="modal-title">Новый чат</div>
+    <div class="auth-form" style="align-items:stretch;">
+      <span class="form-label">Тип чата</span>
+      <select class="form-input" id="new-chat-type" onchange="onChatTypeChange()">
+        <option value="private">Приватный (с пользователем)</option>
+        <option value="group">Групповой</option>
+      </select>
+      <div id="private-fields">
+        <span class="form-label">Никнейм пользователя</span>
+        <input type="text" class="form-input" id="new-peer" placeholder="например, anna">
+      </div>
+      <div id="group-fields" style="display:none;">
+        <span class="form-label">Название группы</span>
+        <input type="text" class="form-input" id="new-group-title" placeholder="Введите название...">
+        <span class="form-label">Участники (ники через запятую, необязательно)</span>
+        <input type="text" class="form-input" id="new-group-members" placeholder="anna, ivan">
+      </div>
+      <div class="form-error" id="modal-error"></div>
+    </div>
+    <div class="modal-actions">
+      <button class="modal-btn secondary" onclick="closeModal('add-channel')">Отмена</button>
+      <button class="modal-btn primary" onclick="createChat()">Создать</button>
+    </div>
+  </div>
+</div>
+
+<script src="js/api.js"></script>
+<script src="js/ws.js"></script>
+<script src="js/ui.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>
