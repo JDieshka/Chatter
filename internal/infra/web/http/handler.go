@@ -185,12 +185,20 @@ func (h *Handler) createPrivateChat(w http.ResponseWriter, r *http.Request) {
 		h.respondErr(w, r, domain.ErrInvalidInput)
 		return
 	}
-	chat, err := h.chat.GetOrCreatePrivateChat(r.Context(), currentUserID(r), req.PeerUsername)
+	chat, created, err := h.chat.GetOrCreatePrivateChat(r.Context(), currentUserID(r), req.PeerUsername)
 	if err != nil {
 		h.respondErr(w, r, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, chat)
+	if created {
+		// Notify the peer's other sessions in real time about the new chat.
+		h.chat.NotifyChatCreated(r.Context(), chat.ID, currentUserID(r), chat)
+	}
+	status := http.StatusOK
+	if created {
+		status = http.StatusCreated
+	}
+	writeJSON(w, status, chat)
 }
 
 func (h *Handler) createGroupChat(w http.ResponseWriter, r *http.Request) {
@@ -207,6 +215,8 @@ func (h *Handler) createGroupChat(w http.ResponseWriter, r *http.Request) {
 		h.respondErr(w, r, err)
 		return
 	}
+	// Notify invited members' other sessions in real time about the new group.
+	h.chat.NotifyChatCreated(r.Context(), chat.ID, currentUserID(r), chat)
 	writeJSON(w, http.StatusCreated, chat)
 }
 

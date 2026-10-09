@@ -64,12 +64,18 @@ type Hub struct {
 	rooms      map[string]map[*Client]bool
 	broadcast  chan broadcastItem
 	register   chan *Client
+	registered chan regItem
 	unregister chan *Client
 	join       chan roomOp
 	leave      chan roomOp
 	log        *slog.Logger
 	// ChatUC is set after construction to break the hub/usecase dependency cycle.
 	ChatUC *usecase.ChatUsecase
+}
+
+type regItem struct {
+	client *Client
+	done   chan<- struct{}
 }
 
 type broadcastItem struct {
@@ -88,6 +94,7 @@ func NewHub(log *slog.Logger) *Hub {
 		rooms:      make(map[string]map[*Client]bool),
 		broadcast:  make(chan broadcastItem, 256),
 		register:   make(chan *Client),
+		registered: make(chan regItem),
 		unregister: make(chan *Client),
 		join:       make(chan roomOp, 64),
 		leave:      make(chan roomOp, 64),
@@ -107,6 +114,13 @@ func (h *Hub) Run(ctx context.Context) {
 		case c := <-h.register:
 			h.clients[c] = true
 			h.log.Info("ws client connected", "user_id", c.userID)
+		case ri := <-h.registered:
+			if _, ok := h.clients[ri.client]; !ok {
+				h.clients[ri.client] = true
+			}
+			if ri.done != nil {
+				close(ri.done)
+			}
 		case c := <-h.unregister:
 			if _, ok := h.clients[c]; ok {
 				delete(h.clients, c)
@@ -175,13 +189,63 @@ func (h *Hub) BroadcastToChat(chatID string, payload []byte) {
 	h.deliver(chatID, payload)
 }
 
+// BroadcastToUsers implements usecase.Broadcaster: delivers a payload to every
+// connected client of the listed users, regardless of room subscriptions.
+func (h *Hub) BroadcastToUsers(userIDs []string, payload []byte) {
+	want := make(map[string]bool, len(userIDs))
+	for _, id := range userIDs {
+		want[id] = true
+	}
+	h.roomsMu.RLock()
+	targets := make([]*Client, 0)
+	for c := range h.clients {
+		if want[c.userID] {
+			targets = append(targets, c)
+		}
+	}
+	h.roomsMu.RUnlock()
+	for _, c := range targets {
+		c.send(payload)
+	}
+}
+
+// autoJoinRooms subscribes a freshly connected client to all chats they are a
+// member of, so messages in any chat arrive without an explicit chat.join.
+func (h *Hub) autoJoinRooms(ctx context.Context, c *Client) {
+	if h.ChatUC == nil {
+		return
+	}
+	list, err := h.ChatUC.ListChats(ctx, c.userID)
+	if err != nil {
+		h.log.Warn("ws auto-join failed", "user_id", c.userID, "err", err)
+		return
+	}
+	for _, ch := range list {
+		h.addRoomMember(c, ch.ID)
+	}
+}
+
 // Register adds a client to the hub (called after successful upgrade).
 func (h *Hub) Register(c *Client) { h.register <- c }
+
+// AwaitRegistered blocks until the Run goroutine has processed this client's
+// registration. Without it, autoJoinRooms/broadcast could race the map update.
+func (h *Hub) AwaitRegistered(c *Client, done chan<- struct{}) { h.registered <- regItem{client: c, done: done} }
 
 // HandleConn runs readPump for a client; writePump is implicit via send().
 func (h *Hub) HandleConn(ctx context.Context, conn *websocket.Conn, userID string) {
 	c := &Client{conn: conn, userID: userID, rooms: make(map[string]bool), hub: h}
 	h.Register(c)
+	// Ensure the hub goroutine actually added us before we subscribe to rooms.
+	regDone := make(chan struct{})
+	h.AwaitRegistered(c, regDone)
+	select {
+	case <-regDone:
+	case <-time.After(5 * time.Second):
+	}
+	// Subscribe to all chats of this user so messages arrive in real time even
+	// if the client hasn't sent chat.join yet (fixes new-chat first-message race).
+	h.autoJoinRooms(ctx, c)
 	defer func() { h.unregister <- c }()
 
 	readTimer := 70 * time.Second

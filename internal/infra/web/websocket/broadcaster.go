@@ -32,3 +32,11 @@ func (m *MultiBroadcaster) BroadcastToChat(chatID string, payload []byte) {
 		h.BroadcastToChat(chatID, payload)
 	}
 }
+
+func (m *MultiBroadcaster) BroadcastToUsers(userIDs []string, payload []byte) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	for _, h := range m.hubs {
+		h.BroadcastToUsers(userIDs, payload)
+	}
+}

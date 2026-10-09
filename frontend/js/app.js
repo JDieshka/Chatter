@@ -284,6 +284,19 @@ document.addEventListener('scroll', (e) => {
 const seenMsgIDs = new Set(); // защита от дублей (пересылка между вкладками, реконнект)
 
 function onWSMessage(ev) {
+  // Новый чат создан собеседником (или приглашением в группу) — добавляем
+  // его в список без перезагрузки страницы.
+  if (ev.type === 'chat.created') {
+    const chat = ev.chat;
+    if (chat && !chats.find(c => c.id === chat.id)) {
+      chats.unshift(chat);
+      WS.join(chat.id);
+      renderChatList();
+      broadcastToOtherTabs({ kind: 'chats:updated' });
+    }
+    return;
+  }
+
   if (ev.type !== 'message.new') return;
   if (ev.id && seenMsgIDs.has(ev.id)) return;
   if (ev.id) seenMsgIDs.add(ev.id);

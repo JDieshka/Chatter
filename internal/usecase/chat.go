@@ -16,6 +16,9 @@ const maxMessageLen = 4096
 // business logic.
 type Broadcaster interface {
 	BroadcastToChat(chatID string, payload []byte)
+	// BroadcastToUsers delivers a payload to all connected clients of the
+	// given user IDs (used for chat.created notifications).
+	BroadcastToUsers(userIDs []string, payload []byte)
 }
 
 type ChatUsecase struct {
@@ -32,25 +35,34 @@ func NewChat(chats domain.ChatRepository, users domain.UserRepository, msgs doma
 func (uc *ChatUsecase) SetBroadcaster(b Broadcaster) { uc.broadcaster = b }
 
 // GetOrCreatePrivateChat returns an existing private chat for the pair or creates one.
-func (uc *ChatUsecase) GetOrCreatePrivateChat(ctx context.Context, userID, peerUsername string) (*domain.Chat, error) {
+// The second return value reports whether the chat was newly created.
+func (uc *ChatUsecase) GetOrCreatePrivateChat(ctx context.Context, userID, peerUsername string) (*domain.Chat, bool, error) {
 	peer, err := uc.users.GetByUsername(ctx, strings.TrimSpace(peerUsername))
 	if err != nil {
 		if errors.Is(err, domain.ErrNotFound) {
-			return nil, fmt.Errorf("%w: peer user not found", domain.ErrInvalidInput)
+			return nil, false, fmt.Errorf("%w: peer user not found", domain.ErrInvalidInput)
 		}
-		return nil, err
+		return nil, false, err
 	}
 	if peer.ID == userID {
-		return nil, fmt.Errorf("%w: cannot chat with yourself", domain.ErrInvalidInput)
+		return nil, false, fmt.Errorf("%w: cannot chat with yourself", domain.ErrInvalidInput)
 	}
 	chat, err := uc.chats.GetPrivateChat(ctx, userID, peer.ID)
 	if err == nil {
-		return chat, nil
+		return chat, false, nil
 	}
 	if !errors.Is(err, domain.ErrNotFound) {
-		return nil, err
+		return nil, false, err
 	}
-	return uc.chats.CreatePrivateChat(ctx, userID, peer.ID)
+	chat, err = uc.chats.CreatePrivateChat(ctx, userID, peer.ID)
+	if err != nil {
+		return nil, false, err
+	}
+	// Attach members so clients can render the peer name without another request.
+	if ms, err := uc.chats.Members(ctx, chat.ID); err == nil {
+		chat.Members = ms
+	}
+	return chat, true, nil
 }
 
 // CreateGroupChat creates a group chat; creator becomes admin.
@@ -206,6 +218,41 @@ func (uc *ChatUsecase) GetMessages(ctx context.Context, chatID, userID string, b
 // MemberIDs exposes chat membership for the WS layer (join validation).
 func (uc *ChatUsecase) MemberIDs(ctx context.Context, chatID string) ([]string, error) {
 	return uc.chats.MemberIDs(ctx, chatID)
+}
+
+// ChatPeerIDs returns user IDs of all members of a chat except the given user.
+// Used by the WS layer to notify peers that a new chat was created with them.
+func (uc *ChatUsecase) ChatPeerIDs(ctx context.Context, chatID, excludeUserID string) ([]string, error) {
+	ids, err := uc.chats.MemberIDs(ctx, chatID)
+	if err != nil {
+		return nil, err
+	}
+	peers := make([]string, 0, len(ids))
+	for _, id := range ids {
+		if id != excludeUserID {
+			peers = append(peers, id)
+		}
+	}
+	return peers, nil
+}
+
+// NotifyChatCreated broadcasts a chat.created event to every member of the chat
+// except the creator, so other clients can show the new chat in real time
+// without a page reload.
+func (uc *ChatUsecase) NotifyChatCreated(ctx context.Context, chatID, creatorID string, chat *domain.Chat) {
+	if uc.broadcaster == nil || chat == nil {
+		return
+	}
+	peers, err := uc.ChatPeerIDs(ctx, chatID, creatorID)
+	if err != nil || len(peers) == 0 {
+		return
+	}
+	payload := map[string]interface{}{
+		"type":    "chat.created",
+		"chat":    chat,
+		"chat_id": chatID,
+	}
+	uc.broadcaster.BroadcastToUsers(peers, MustJSON(payload))
 }
 
 func (uc *ChatUsecase) UserByID(ctx context.Context, id string) (*domain.User, error) {
