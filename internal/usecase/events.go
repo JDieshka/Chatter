@@ -9,12 +9,13 @@ import (
 
 // OutgoingMessage is the server->client WS event for a new message.
 type OutgoingMessage struct {
-	Type      string        `json:"type"`
-	ID        int64         `json:"id"`
-	ChatID    string        `json:"chat_id"`
-	Sender    *domain.User  `json:"sender"`
-	Content   string        `json:"content"`
-	CreatedAt time.Time     `json:"created_at"`
+	Type      string       `json:"type"`
+	ID        int64        `json:"id"`
+	ChatID    string       `json:"chat_id"`
+	SenderID  string       `json:"sender_id"`
+	Sender    *domain.User `json:"sender"`
+	Content   string       `json:"content"`
+	CreatedAt time.Time    `json:"created_at"`
 }
 
 // OutgoingError is the server->client WS error event.

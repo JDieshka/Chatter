@@ -10,19 +10,19 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/go-chi/chi/v5"
+	chimw "github.com/go-chi/chi/v5/middleware"
 	"github.com/golang-migrate/migrate/v4"
 	_ "github.com/golang-migrate/migrate/v4/database/postgres"
 	_ "github.com/golang-migrate/migrate/v4/source/file"
-	"github.com/go-chi/chi/v5"
-	chimw "github.com/go-chi/chi/v5/middleware"
 
 	"github.com/chattergo/chattergo/internal/config"
 	"github.com/chattergo/chattergo/internal/infra/repository/postgres"
 	webhttp "github.com/chattergo/chattergo/internal/infra/web/http"
 	ws "github.com/chattergo/chattergo/internal/infra/web/websocket"
 	"github.com/chattergo/chattergo/internal/pkg/auth"
-	pkgmw "github.com/chattergo/chattergo/internal/pkg/middleware"
 	applog "github.com/chattergo/chattergo/internal/pkg/logger"
+	pkgmw "github.com/chattergo/chattergo/internal/pkg/middleware"
 	"github.com/chattergo/chattergo/internal/usecase"
 )
 
@@ -73,6 +73,7 @@ func main() {
 	hub := ws.NewHub(log)
 	chatUC := usecase.NewChat(postgres.NewChatRepo(repo), postgres.NewUserRepo(repo), postgres.NewMessageRepo(repo), hub)
 	hub.ChatUC = chatUC
+	chatUC.SetBroadcaster(ws.NewMultiBroadcaster(hub))
 
 	httpH := webhttp.NewHandler(authUC, chatUC, jwtMgr, log)
 

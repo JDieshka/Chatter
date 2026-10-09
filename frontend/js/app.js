@@ -31,8 +31,10 @@ async function boot() {
     return;
   }
   renderUserHeader();
-  await loadChats();
+  // Сначала открываем WS: тогда loadChats() успеет подписаться на все чаты,
+  // и новые сообщения прилетают в реальном времени даже для закрытых чатов.
   WS.open();
+  await loadChats();
   showPage('app');
 }
 
@@ -125,6 +127,9 @@ async function loadChats() {
     console.error('listChats:', e);
     chats = [];
   }
+  // Подписка на каждый чат (сервер проверяет членство): новые сообщения в любом
+  // чате прилетают в реальном времени, даже если этот чат сейчас не открыт.
+  chats.forEach(c => WS.join(c.id));
   renderChatList();
 }
 
@@ -209,7 +214,8 @@ function messageHTML(m) {
   // у сообщений из REST нет объекта sender — сверяем по sender_id
   const isMine = outgoing || m.sender_id === (currentUser && currentUser.id);
   const who = m.sender ? m.sender.username : '';
-  return `<div class="message ${isMine ? 'outgoing' : 'incoming'}">
+  const mid = m.id ? ` id="msg-${m.id}"` : '';
+  return `<div class="message ${isMine ? 'outgoing' : 'incoming'}"${mid}>
     <div class="message-avatar">${esc(initials(isMine ? (currentUser && currentUser.username) : who))}</div>
     <div class="message-body">
       ${!isMine && who ? '<div class="message-sender">' + esc(who) + '</div>' : ''}
@@ -220,6 +226,8 @@ function messageHTML(m) {
 }
 
 function renderMessages(msgs) {
+  seenMsgIDs.clear();
+  msgs.forEach(m => { if (m.id) seenMsgIDs.add(m.id); });
   const box = $('chat-messages');
   if (!msgs.length) {
     box.innerHTML = '<div class="messages-hint">Сообщений пока нет — напишите первое!</div>';
@@ -230,6 +238,7 @@ function renderMessages(msgs) {
 }
 
 function appendMessage(m) {
+  if (m.id && document.getElementById('msg-' + m.id)) return; // уже показан
   const box = $('chat-messages');
   const hint = box.querySelector('.messages-hint');
   if (hint) hint.remove();
@@ -247,6 +256,7 @@ async function sendCurrentMessage() {
   if (!WS.sendText(currentChat.id, text)) {
     try {
       const m = await API.sendMessage(currentChat.id, text);
+      if (m && m.id) seenMsgIDs.add(m.id);
       appendMessage(m);
     } catch (e) {
       input.value = text;
@@ -271,9 +281,14 @@ document.addEventListener('scroll', (e) => {
 }, true);
 
 // ---------- Приём событий WebSocket ----------
+const seenMsgIDs = new Set(); // защита от дублей (пересылка между вкладками, реконнект)
+
 function onWSMessage(ev) {
   if (ev.type !== 'message.new') return;
-  const mine = ev.sender && currentUser && ev.sender.id === currentUser.id;
+  if (ev.id && seenMsgIDs.has(ev.id)) return;
+  if (ev.id) seenMsgIDs.add(ev.id);
+  const mine = (ev.sender_id && currentUser && ev.sender_id === currentUser.id) ||
+               (ev.sender && currentUser && ev.sender.id === currentUser.id);
 
   // Основной случай: собеседник сейчас открыл этот чат — добавляем в реальном времени.
   if (currentChat && ev.chat_id === currentChat.id) {
@@ -311,6 +326,8 @@ if (tabSync) {
     const p = e.data;
     if (!p) return;
     if (p.kind === 'message.new') {
+      if (p.msg && p.msg.id && seenMsgIDs.has(p.msg.id)) return;
+      if (p.msg && p.msg.id) seenMsgIDs.add(p.msg.id);
       const c = chats.find(x => x.id === p.chat_id);
       if (c) {
         c.last_message_at = p.msg.created_at;

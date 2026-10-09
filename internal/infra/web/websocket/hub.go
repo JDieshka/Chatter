@@ -14,12 +14,12 @@ import (
 
 // Client is a single WebSocket connection bound to an authenticated user.
 type Client struct {
-	conn   *websocket.Conn
-	userID string
-	mu     sync.Mutex // guards writes only — a slow client never blocks broadcast
-	rooms  map[string]bool
+	conn      *websocket.Conn
+	userID    string
+	mu        sync.Mutex // guards writes only — a slow client never blocks broadcast
+	rooms     map[string]bool
 	isClosing bool
-	hub    *Hub
+	hub       *Hub
 }
 
 func (c *Client) send(payload []byte) {
@@ -57,6 +57,9 @@ type IncomingEvent struct {
 // All mutations of the maps happen inside a single goroutine driven by channels,
 // so no mutex is needed for them.
 type Hub struct {
+	// roomsMu guards the fast-path read in BroadcastToChat; all writes to
+	// clients/rooms still happen only inside the Run goroutine.
+	roomsMu    sync.RWMutex
 	clients    map[*Client]bool
 	rooms      map[string]map[*Client]bool
 	broadcast  chan broadcastItem
@@ -119,14 +122,7 @@ func (h *Hub) Run(ctx context.Context) {
 				h.log.Info("ws client disconnected", "user_id", c.userID)
 			}
 		case op := <-h.join:
-			if !h.clients[op.client] {
-				continue
-			}
-			if _, ok := h.rooms[op.chatID]; !ok {
-				h.rooms[op.chatID] = make(map[*Client]bool)
-			}
-			h.rooms[op.chatID][op.client] = true
-			op.client.rooms[op.chatID] = true
+			h.addRoomMember(op.client, op.chatID)
 		case op := <-h.leave:
 			if r, ok := h.rooms[op.chatID]; ok {
 				delete(r, op.client)
@@ -136,20 +132,47 @@ func (h *Hub) Run(ctx context.Context) {
 			}
 			delete(op.client.rooms, op.chatID)
 		case item := <-h.broadcast:
-			for c := range h.rooms[item.chatID] {
-				c.send(item.data)
-			}
+			h.deliver(item.chatID, item.data)
 		}
 	}
 }
 
-// BroadcastToChat implements usecase.Broadcaster (in-memory now, Redis later).
-func (h *Hub) BroadcastToChat(chatID string, payload []byte) {
-	select {
-	case h.broadcast <- broadcastItem{chatID: chatID, data: payload}:
-	default:
-		h.log.Warn("broadcast queue full, dropping message", "chat_id", chatID)
+// addRoomMember subscribes a client to a room. Safe to call from any goroutine.
+func (h *Hub) addRoomMember(c *Client, chatID string) {
+	h.roomsMu.Lock()
+	defer h.roomsMu.Unlock()
+	if !h.clients[c] {
+		return
 	}
+	if _, ok := h.rooms[chatID]; !ok {
+		h.rooms[chatID] = make(map[*Client]bool)
+	}
+	h.rooms[chatID][c] = true
+	c.rooms[chatID] = true
+}
+
+// deliver sends a payload to every client subscribed to the chat's room.
+func (h *Hub) deliver(chatID string, data []byte) {
+	h.roomsMu.RLock()
+	room := h.rooms[chatID]
+	targets := make([]*Client, 0, len(room))
+	for c := range room {
+		targets = append(targets, c)
+	}
+	h.roomsMu.RUnlock()
+	if len(targets) == 0 && h.log != nil {
+		h.log.Warn("broadcast dropped: no clients in room", "chat_id", chatID)
+	}
+	for _, c := range targets {
+		c.send(data)
+	}
+}
+
+// BroadcastToChat implements usecase.Broadcaster (in-memory now, Redis later).
+// It delivers synchronously: SendMessage must not return before subscribers
+// were notified, otherwise a fast sender could race its own receiver.
+func (h *Hub) BroadcastToChat(chatID string, payload []byte) {
+	h.deliver(chatID, payload)
 }
 
 // Register adds a client to the hub (called after successful upgrade).
@@ -187,7 +210,8 @@ func (h *Hub) handleEvent(ctx context.Context, c *Client, ev IncomingEvent) {
 			c.send(mustMarshal(usecase.OutgoingError{Type: "error", Code: "CHAT_NOT_FOUND", Message: "chat not found or access denied"}))
 			return
 		}
-		h.join <- roomOp{client: c, chatID: ev.ChatID}
+		// synchronous subscribe — see comment on BroadcastToChat
+		h.addRoomMember(c, ev.ChatID)
 	case "chat.leave":
 		h.leave <- roomOp{client: c, chatID: ev.ChatID}
 	case "message.send":

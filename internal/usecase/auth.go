@@ -17,9 +17,9 @@ import (
 var usernameRe = regexp.MustCompile(`^[a-zA-Z0-9_.-]{3,64}$`)
 
 type AuthUsecase struct {
-	users    domain.UserRepository
-	tokens   domain.RefreshTokenRepository
-	jwt      *pkgauth.Manager
+	users  domain.UserRepository
+	tokens domain.RefreshTokenRepository
+	jwt    *pkgauth.Manager
 }
 
 func NewAuth(users domain.UserRepository, tokens domain.RefreshTokenRepository, jwt *pkgauth.Manager) *AuthUsecase {

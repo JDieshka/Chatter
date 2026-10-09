@@ -19,9 +19,9 @@ type Broadcaster interface {
 }
 
 type ChatUsecase struct {
-	chats   domain.ChatRepository
-	users   domain.UserRepository
-	msgs    domain.MessageRepository
+	chats       domain.ChatRepository
+	users       domain.UserRepository
+	msgs        domain.MessageRepository
 	broadcaster Broadcaster
 }
 
@@ -185,6 +185,7 @@ func (uc *ChatUsecase) SendMessage(ctx context.Context, chatID, senderID, conten
 			Content:   content,
 			CreatedAt: msg.CreatedAt,
 			ID:        msg.ID,
+			SenderID:  senderID,
 		}
 		uc.broadcaster.BroadcastToChat(chatID, MustJSON(payload))
 	}

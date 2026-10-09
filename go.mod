@@ -1,6 +1,6 @@
 module github.com/chattergo/chattergo
 
-go 1.26.0
+go 1.19
 
 require (
 	github.com/coder/websocket v1.8.15

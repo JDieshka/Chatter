@@ -41,7 +41,7 @@ func New(dsn string) (*Repo, error) {
 	return &Repo{pool: pool}, nil
 }
 
-func (r *Repo) Close() { r.pool.Close() }
+func (r *Repo) Close()              { r.pool.Close() }
 func (r *Repo) Pool() *pgxpool.Pool { return r.pool }
 
 // ---- Users ----

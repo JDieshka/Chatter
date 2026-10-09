@@ -19,13 +19,13 @@ const (
 )
 
 var (
-	ErrNotFound         = errors.New("not found")
-	ErrAlreadyExists    = errors.New("already exists")
-	ErrForbidden        = errors.New("forbidden: not a chat member")
-	ErrInvalidInput     = errors.New("invalid input")
-	ErrUnauthorized     = errors.New("unauthorized")
-	ErrInvalidCreds     = errors.New("invalid username or password")
-	ErrTokenExpired     = errors.New("token expired or invalid")
+	ErrNotFound      = errors.New("not found")
+	ErrAlreadyExists = errors.New("already exists")
+	ErrForbidden     = errors.New("forbidden: not a chat member")
+	ErrInvalidInput  = errors.New("invalid input")
+	ErrUnauthorized  = errors.New("unauthorized")
+	ErrInvalidCreds  = errors.New("invalid username or password")
+	ErrTokenExpired  = errors.New("token expired or invalid")
 )
 
 type User struct {

@@ -98,10 +98,10 @@ type authReq struct {
 }
 
 type tokensResp struct {
-	User           *domain.User        `json:"user,omitempty"`
-	AccessToken    string              `json:"access_token"`
-	RefreshToken   string              `json:"refresh_token"`
-	ExpiresIn      int                 `json:"expires_in"`
+	User         *domain.User `json:"user,omitempty"`
+	AccessToken  string       `json:"access_token"`
+	RefreshToken string       `json:"refresh_token"`
+	ExpiresIn    int          `json:"expires_in"`
 }
 
 func (h *Handler) register(w http.ResponseWriter, r *http.Request) {
@@ -195,7 +195,7 @@ func (h *Handler) createPrivateChat(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) createGroupChat(w http.ResponseWriter, r *http.Request) {
 	var req struct {
-		Title         string   `json:"title"`
+		Title           string   `json:"title"`
 		MemberUsernames []string `json:"member_usernames"`
 	}
 	if err := decode(r, &req); err != nil {

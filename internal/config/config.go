@@ -8,12 +8,12 @@ import (
 )
 
 type Config struct {
-	HTTPAddr      string
-	DSN           string
-	JWTSecret     string
-	AccessTokenTTL  time.Duration
-	RefreshTokenTTL time.Duration
-	MigrationsDir   string
+	HTTPAddr           string
+	DSN                string
+	JWTSecret          string
+	AccessTokenTTL     time.Duration
+	RefreshTokenTTL    time.Duration
+	MigrationsDir      string
 	CorsAllowedOrigins []string
 }
 
@@ -43,12 +43,13 @@ func Load() (*Config, error) {
 		return nil, fmt.Errorf("invalid PORT: %w", err)
 	}
 	c := &Config{
-		HTTPAddr:          ":" + strconv.Itoa(port),
-		DSN:               getenv("DATABASE_URL", "postgres://chatter:chatter@localhost:5432/chatter?sslmode=disable"),
-		JWTSecret:         secret,
-		AccessTokenTTL:    accTTL,
-		RefreshTokenTTL:   refTTL,
-		MigrationsDir:     getenv("MIGRATIONS_DIR", "migrations"),
+		HTTPAddr:           ":" + strconv.Itoa(port),
+		DSN:                getenv("DATABASE_URL", "postgres://chatter:chatter@localhost:5432/chatter?sslmode=disable"),
+		JWTSecret:          secret,
+		AccessTokenTTL:     accTTL,
+		RefreshTokenTTL:    refTTL,
+		MigrationsDir:      getenv("MIGRATIONS_DIR", "migrations"),
 		CorsAllowedOrigins: []string{"*"},
 	}
-	return c, nil }
+	return c, nil
+}
