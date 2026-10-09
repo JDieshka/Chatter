@@ -1,5 +1,6 @@
 # --- Build stage ---
-FROM golang:1.22-alpine AS build
+# go.mod требует Go >= 1.26 — версия образа должна совпадать с версией в go.mod
+FROM golang:1.26-alpine AS build
 
 WORKDIR /app
 
