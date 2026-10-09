@@ -268,6 +268,10 @@ func (h *Handler) getMessages(w http.ResponseWriter, r *http.Request) {
 		h.respondErr(w, r, err)
 		return
 	}
+	// Opening history (first page) counts as reading the chat: reset unread counter.
+	if before == 0 {
+		_ = h.chat.MarkRead(r.Context(), chi.URLParam(r, "id"), currentUserID(r))
+	}
 	if msgs == nil {
 		msgs = []domain.Message{}
 	}

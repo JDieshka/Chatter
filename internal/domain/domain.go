@@ -73,6 +73,16 @@ type Message struct {
 type ChatWithLastMessage struct {
 	Chat
 	LastMessageAt *time.Time `json:"last_message_at"`
+	// LastContent is the text of the most recent message (preview in UI).
+	LastContent string `json:"last_content,omitempty"`
+	// UnreadCount is the number of messages since the user last opened the
+	// chat (0 when open or no history).
+	UnreadCount int64 `json:"unread_count"`
+}
+
+// ChatReadRepository tracks per-user read position in chats.
+type ChatReadRepository interface {
+	MarkRead(ctx context.Context, chatID, userID string) error
 }
 
 // Repository interfaces (gateways). Infra implements them.

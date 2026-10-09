@@ -127,6 +127,11 @@ async function loadChats() {
     console.error('listChats:', e);
     chats = [];
   }
+  // Серверные данные точнее локальных — сбрасываем кэш счётчиков/превью.
+  Object.keys(unread).forEach(k => delete unread[k]);
+  Object.keys(lastPreview).forEach(k => delete lastPreview[k]);
+  // Открытый чат не может быть непрочитанным.
+  if (currentChat) currentChat.unread_count = 0;
   // Подписка на каждый чат (сервер проверяет членство): новые сообщения в любом
   // чате прилетают в реальном времени, даже если этот чат сейчас не открыт.
   chats.forEach(c => WS.join(c.id));
@@ -151,14 +156,24 @@ function renderChatList() {
   list.innerHTML = chats.map(c => {
     const active = currentChat && currentChat.id === c.id ? ' active' : '';
     const name = chatDisplayName(c);
-    const preview = c.last_message_at
-      ? fmtTime(c.last_message_at)
+    // Превью: текст последнего сообщения (сохранённый локально или с сервера),
+    // если сообщений нет — время создания чата.
+    const prev = lastPreview[c.id];
+    const content = (prev ? prev.content : (c.last_content || '')).trim();
+    const when = fmtTime((prev && prev.created_at) || c.last_message_at || c.created_at);
+    const previewText = content
+      ? (content.length > 40 ? content.slice(0, 40) + '…' : content)
       : 'Нет сообщений';
+    const unreadCount = Math.max(unread[c.id] || 0, c.unread_count || 0);
+    const badge = unreadCount > 0
+      ? `<div class="unread-badge">${unreadCount > 99 ? '99+' : unreadCount}</div>`
+      : '';
     return `<div class="chat-item${active}" onclick="openChat('${c.id}')">
-      <div class="chat-avatar">${esc(initials(name))}</div>
+      <div class="chat-avatar">${esc(initials(name))}${badge}</div>
       <div class="chat-info">
         <div class="chat-name">${esc(name)}</div>
-        <div class="chat-preview">${esc(preview)}</div>
+        <div class="chat-preview" title="${esc(content)}">${esc(previewText)}</div>
+        <div class="chat-time">${esc(when)}</div>
       </div>
     </div>`;
   }).join('');
@@ -167,6 +182,8 @@ function renderChatList() {
 async function openChat(chatID) {
   currentChat = chats.find(c => c.id === chatID) || null;
   if (!currentChat) return;
+  clearUnread(chatID);
+  if (currentChat) currentChat.unread_count = 0;
   renderChatList();
   $('chat-title').textContent = chatDisplayName(currentChat);
   $('msg-input').disabled = false;
@@ -283,6 +300,25 @@ document.addEventListener('scroll', (e) => {
 // ---------- Приём событий WebSocket ----------
 const seenMsgIDs = new Set(); // защита от дублей (пересылка между вкладками, реконнект)
 
+// Локальные счётчики непрочитанных и превью: сервер присылает их в GET /api/chats,
+// а между перезагрузками обновляем на лету из WS-событий.
+const unread = {};        // chat_id -> число непрочитанных пришедших сообщений
+const lastPreview = {};   // chat_id -> { content, created_at } последнего сообщения
+
+function rememberPreview(chatID, msg) {
+  if (!chatID || !msg) return;
+  lastPreview[chatID] = { content: msg.content || '', created_at: msg.created_at };
+}
+
+function bumpUnread(chatID) {
+  if (!chatID) return;
+  unread[chatID] = (unread[chatID] || 0) + 1;
+}
+
+function clearUnread(chatID) {
+  delete unread[chatID];
+}
+
 function onWSMessage(ev) {
   // Новый чат создан собеседником (или приглашением в группу) — добавляем
   // его в список без перезагрузки страницы.
@@ -303,18 +339,18 @@ function onWSMessage(ev) {
   const mine = (ev.sender_id && currentUser && ev.sender_id === currentUser.id) ||
                (ev.sender && currentUser && ev.sender.id === currentUser.id);
 
+  rememberPreview(ev.chat_id, ev);
+
   // Основной случай: собеседник сейчас открыл этот чат — добавляем в реальном времени.
   if (currentChat && ev.chat_id === currentChat.id) {
     appendMessage(ev);
+    if (!mine) clearUnread(ev.chat_id); // читаем прямо сейчас
   } else if (mine) {
     // Собственное сообщение из другого окна/вкладки, где этот чат открыт:
-    // не показываем дубль, только обновим превью списка.
-    const c = chats.find(x => x.id === ev.chat_id);
-    if (c) c.last_message_at = ev.created_at;
-    renderChatList();
-    return;
+    // не показываем дубль и не считаем его непрочитанным.
   } else {
-    // Чат открыт в другой вкладке этого браузера — синхронизируем ленту между вкладками.
+    // Чат закрыт: увеличиваем счётчик непрочитанных и уведомляем другие вкладки.
+    bumpUnread(ev.chat_id);
     broadcastToOtherTabs({ kind: 'message.new', chat_id: ev.chat_id, msg: ev });
   }
 
@@ -322,7 +358,10 @@ function onWSMessage(ev) {
   const c = chats.find(x => x.id === ev.chat_id);
   if (c) {
     c.last_message_at = ev.created_at;
+    if (ev.content != null) c.last_content = ev.content;
     chats.sort((a, b) => new Date(b.last_message_at || 0) - new Date(a.last_message_at || 0));
+    renderChatList();
+  } else {
     renderChatList();
   }
 }
@@ -341,13 +380,21 @@ if (tabSync) {
     if (p.kind === 'message.new') {
       if (p.msg && p.msg.id && seenMsgIDs.has(p.msg.id)) return;
       if (p.msg && p.msg.id) seenMsgIDs.add(p.msg.id);
+      rememberPreview(p.chat_id, p.msg);
+      const mineTab = (p.msg.sender_id && currentUser && p.msg.sender_id === currentUser.id) ||
+                      (p.msg.sender && currentUser && p.msg.sender.id === currentUser.id);
       const c = chats.find(x => x.id === p.chat_id);
       if (c) {
         c.last_message_at = p.msg.created_at;
-        renderChatList();
+        if (p.msg.content != null) c.last_content = p.msg.content;
       }
-      // Если этот чат открыт в текущей вкладке — добавляем сообщение в ленту.
-      if (currentChat && currentChat.id === p.chat_id) appendMessage(p.msg);
+      if (currentChat && currentChat.id === p.chat_id) {
+        appendMessage(p.msg);
+        if (!mineTab) clearUnread(p.chat_id);
+      } else if (!mineTab) {
+        bumpUnread(p.chat_id);
+      }
+      renderChatList();
     } else if (p.kind === 'chats:updated') {
       loadChats();
     }

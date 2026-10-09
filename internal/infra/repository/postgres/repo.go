@@ -124,10 +124,19 @@ func (c *ChatRepo) GetByID(ctx context.Context, id string) (*domain.Chat, error)
 func (c *ChatRepo) ListByUser(ctx context.Context, userID string) ([]domain.ChatWithLastMessage, error) {
 	rows, err := c.r.pool.Query(ctx, `
 		SELECT ch.id, ch.type, ch.title, ch.created_by::text, ch.created_at,
-		       (SELECT MAX(created_at) FROM messages m WHERE m.chat_id = ch.id) AS last_msg
+		       lm.created_at, COALESCE(lm.content, ''),
+		       (SELECT COUNT(*) FROM messages m
+		         WHERE m.chat_id = ch.id AND m.sender_id <> $1
+		           AND m.id > COALESCE(cr.last_read_message_id, 0)) AS unread
 		FROM chats ch
 		JOIN chat_members cm ON cm.chat_id = ch.id AND cm.user_id = $1
-		ORDER BY last_msg DESC NULLS LAST, ch.created_at DESC`, userID)
+		LEFT JOIN LATERAL (
+			SELECT m.created_at, m.content, m.id
+			FROM messages m WHERE m.chat_id = ch.id
+			ORDER BY m.id DESC LIMIT 1
+		) lm ON TRUE
+		LEFT JOIN chat_reads cr ON cr.chat_id = ch.id AND cr.user_id = $1
+		ORDER BY lm.created_at DESC NULLS LAST, ch.created_at DESC`, userID)
 	if err != nil {
 		return nil, err
 	}
@@ -135,7 +144,8 @@ func (c *ChatRepo) ListByUser(ctx context.Context, userID string) ([]domain.Chat
 	var out []domain.ChatWithLastMessage
 	for rows.Next() {
 		var cw domain.ChatWithLastMessage
-		if err := rows.Scan(&cw.ID, &cw.Type, &cw.Title, &cw.CreatedBy, &cw.CreatedAt, &cw.LastMessageAt); err != nil {
+		if err := rows.Scan(&cw.ID, &cw.Type, &cw.Title, &cw.CreatedBy, &cw.CreatedAt,
+			&cw.LastMessageAt, &cw.LastContent, &cw.UnreadCount); err != nil {
 			return nil, err
 		}
 		out = append(out, cw)
@@ -316,5 +326,21 @@ func (t *RefreshTokenRepo) GetUserID(ctx context.Context, tokenHash string) (str
 
 func (t *RefreshTokenRepo) Delete(ctx context.Context, tokenHash string) error {
 	_, err := t.r.pool.Exec(ctx, `DELETE FROM refresh_tokens WHERE token_hash = $1`, tokenHash)
+	return err
+}
+
+// ChatReadRepo stores per-user read positions (for unread counters).
+type ChatReadRepo struct{ r *Repo }
+
+func NewChatReadRepo(r *Repo) *ChatReadRepo { return &ChatReadRepo{r: r} }
+
+func (c *ChatReadRepo) MarkRead(ctx context.Context, chatID, userID string) error {
+	_, err := c.r.pool.Exec(ctx, `
+		INSERT INTO chat_reads (chat_id, user_id, last_read_message_id, updated_at)
+		SELECT $1::uuid, $2::uuid, COALESCE(MAX(m.id), 0), NOW()
+		FROM messages m WHERE m.chat_id = $1::uuid
+		ON CONFLICT (chat_id, user_id) DO UPDATE
+		SET last_read_message_id = GREATEST(chat_reads.last_read_message_id, EXCLUDED.last_read_message_id),
+		    updated_at = NOW()`, chatID, userID)
 	return err
 }

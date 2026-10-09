@@ -806,3 +806,35 @@ body {
     max-width: 90%;
   }
 }
+
+/* ===== Unread badge & chat preview time ===== */
+.chat-avatar {
+  position: relative;
+  overflow: visible;
+}
+
+.unread-badge {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 5px;
+  border-radius: 10px;
+  background: var(--pink);
+  border: 2px solid var(--border);
+  color: var(--border);
+  font-family: 'Inter', sans-serif;
+  font-size: 11px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 2;
+}
+
+.chat-time {
+  font-size: 10px;
+  color: #999;
+  margin-top: 2px;
+}

@@ -71,7 +71,7 @@ func main() {
 	authUC := usecase.NewAuth(postgres.NewUserRepo(repo), postgres.NewRefreshTokenRepo(repo), jwtMgr)
 
 	hub := ws.NewHub(log)
-	chatUC := usecase.NewChat(postgres.NewChatRepo(repo), postgres.NewUserRepo(repo), postgres.NewMessageRepo(repo), hub)
+	chatUC := usecase.NewChat(postgres.NewChatRepo(repo), postgres.NewUserRepo(repo), postgres.NewMessageRepo(repo), postgres.NewChatReadRepo(repo), hub)
 	hub.ChatUC = chatUC
 	chatUC.SetBroadcaster(ws.NewMultiBroadcaster(hub))
 

@@ -25,11 +25,24 @@ type ChatUsecase struct {
 	chats       domain.ChatRepository
 	users       domain.UserRepository
 	msgs        domain.MessageRepository
+	reads       domain.ChatReadRepository
 	broadcaster Broadcaster
 }
 
-func NewChat(chats domain.ChatRepository, users domain.UserRepository, msgs domain.MessageRepository, b Broadcaster) *ChatUsecase {
-	return &ChatUsecase{chats: chats, users: users, msgs: msgs, broadcaster: b}
+func NewChat(chats domain.ChatRepository, users domain.UserRepository, msgs domain.MessageRepository, reads domain.ChatReadRepository, b Broadcaster) *ChatUsecase {
+	return &ChatUsecase{chats: chats, users: users, msgs: msgs, reads: reads, broadcaster: b}
+}
+
+// MarkRead records that the user has seen all messages of the chat up to now.
+// Called when the client opens a chat (REST history request).
+func (uc *ChatUsecase) MarkRead(ctx context.Context, chatID, userID string) error {
+	if uc.reads == nil {
+		return nil
+	}
+	if err := uc.EnsureMember(ctx, chatID, userID); err != nil {
+		return err
+	}
+	return uc.reads.MarkRead(ctx, chatID, userID)
 }
 
 func (uc *ChatUsecase) SetBroadcaster(b Broadcaster) { uc.broadcaster = b }
