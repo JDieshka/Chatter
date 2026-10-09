@@ -92,9 +92,18 @@ func main() {
 	})
 
 	// Serve the frontend static files at /.
+	// noCache middleware disables browser caching of HTML/JS/CSS so that
+	// updated frontend code is picked up immediately after a redeploy
+	// (otherwise browsers keep serving stale cached api.js/app.js).
 	frontendDir := getenv("FRONTEND_DIR", "frontend")
 	if st, err := os.Stat(frontendDir); err == nil && st.IsDir() {
-		r.Handle("/*", http.StripPrefix("/", http.FileServer(http.Dir(frontendDir))))
+		noCache := func(next http.Handler) http.Handler {
+			return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+				w.Header().Set("Cache-Control", "no-cache, must-revalidate")
+				next.ServeHTTP(w, req)
+			})
+		}
+		r.Handle("/*", noCache(http.StripPrefix("/", http.FileServer(http.Dir(frontendDir)))))
 	} else {
 		log.Warn("frontend directory not found, skipping static serving", "dir", frontendDir)
 	}
