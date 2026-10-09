@@ -83,6 +83,7 @@ func (h *Handler) RegisterRoutes(r chi.Router) {
 			priv.Post("/chats/group", h.createGroupChat)
 			priv.Route("/chats/{id}", func(c chi.Router) {
 				c.Get("/", h.getChat)
+				c.Get("/info", h.getChatInfo)
 				c.Post("/members", h.addMember)
 				c.Get("/messages", h.getMessages)
 				c.Post("/messages", h.sendMessage)
@@ -227,6 +228,15 @@ func (h *Handler) getChat(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, chat)
+}
+
+func (h *Handler) getChatInfo(w http.ResponseWriter, r *http.Request) {
+	info, err := h.chat.GetChatInfo(r.Context(), chi.URLParam(r, "id"), currentUserID(r))
+	if err != nil {
+		h.respondErr(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, info)
 }
 
 func (h *Handler) addMember(w http.ResponseWriter, r *http.Request) {

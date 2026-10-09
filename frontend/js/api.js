@@ -76,6 +76,7 @@ const API = {
   // ---- Chats ----
   listChats()     { return this.call('GET', '/api/chats'); },
   getChat(id)     { return this.call('GET', '/api/chats/' + id); },
+  getChatInfo(id) { return this.call('GET', '/api/chats/' + id + '/info'); },
   createPrivateChat(peerUsername) {
     return this.call('POST', '/api/chats/private', { peer_username: peerUsername });
   },

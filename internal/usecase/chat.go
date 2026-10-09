@@ -130,6 +130,40 @@ func (uc *ChatUsecase) GetChat(ctx context.Context, chatID, userID string) (*dom
 	return chat, nil
 }
 
+// GetChatInfo returns detailed information about a chat (who is in it, who
+// created it, when members joined). Accessible only to chat members.
+func (uc *ChatUsecase) GetChatInfo(ctx context.Context, chatID, userID string) (*domain.ChatInfo, error) {
+	if err := uc.EnsureMember(ctx, chatID, userID); err != nil {
+		return nil, err
+	}
+	chat, err := uc.chats.GetByID(ctx, chatID)
+	if err != nil {
+		return nil, err
+	}
+	members, err := uc.chats.MembersWithJoin(ctx, chatID)
+	if err != nil {
+		return nil, err
+	}
+	info := &domain.ChatInfo{
+		ID: chat.ID, Type: chat.Type, Title: chat.Title,
+		CreatedBy: chat.CreatedBy, CreatedAt: chat.CreatedAt,
+		Members: make([]domain.MemberInfo, 0, len(members)),
+	}
+	for _, m := range members {
+		isCreator := m.UserID == chat.CreatedBy
+		info.Members = append(info.Members, domain.MemberInfo{
+			UserID: m.UserID, Username: m.Username, Role: m.Role,
+			JoinedAt: m.JoinedAt, IsCreator: isCreator,
+		})
+	}
+	info.MemberCount = len(info.Members)
+	if u, err := uc.users.GetByID(ctx, chat.CreatedBy); err == nil {
+		u.PasswordHash = ""
+		info.Creator = &u
+	}
+	return info, nil
+}
+
 // AddMember adds a user to a group chat. Only group admins may add members.
 func (uc *ChatUsecase) AddMember(ctx context.Context, chatID, actorID, username string) error {
 	if err := uc.EnsureMember(ctx, chatID, actorID); err != nil {

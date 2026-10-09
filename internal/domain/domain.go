@@ -54,6 +54,16 @@ type ChatMemberDTO struct {
 	Role     string `json:"role"`
 }
 
+// MemberInfo extends ChatMemberDTO with join date and creator flag for the
+// chat-info view.
+type MemberInfo struct {
+	UserID    string    `json:"user_id"`
+	Username  string    `json:"username"`
+	Role      string    `json:"role"`
+	JoinedAt  time.Time `json:"joined_at"`
+	IsCreator bool      `json:"is_creator"`
+}
+
 type ChatMember struct {
 	ChatID   string
 	UserID   string
@@ -102,7 +112,29 @@ type ChatRepository interface {
 	AddMember(ctx context.Context, chatID string, m ChatMember) error
 	IsMember(ctx context.Context, chatID, userID string) (bool, error)
 	Members(ctx context.Context, chatID string) ([]ChatMemberDTO, error)
+	MembersWithJoin(ctx context.Context, chatID string) ([]ChatMemberWithJoin, error)
 	MemberIDs(ctx context.Context, chatID string) ([]string, error)
+}
+
+// ChatMemberWithJoin is a membership row joined with user info and join date.
+type ChatMemberWithJoin struct {
+	UserID   string
+	Username string
+	Role     string
+	JoinedAt time.Time
+}
+
+// ChatInfo is the full chat card shown in the UI: metadata plus members with
+// their roles, join dates and creator flag.
+type ChatInfo struct {
+	ID          string       `json:"id"`
+	Type        string       `json:"type"`
+	Title       *string      `json:"title"`
+	CreatedBy   string       `json:"created_by"`
+	Creator     *User        `json:"creator,omitempty"`
+	CreatedAt   time.Time    `json:"created_at"`
+	MemberCount int          `json:"member_count"`
+	Members     []MemberInfo `json:"members"`
 }
 
 type MessageRepository interface {

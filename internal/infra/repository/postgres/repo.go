@@ -235,6 +235,26 @@ func (c *ChatRepo) Members(ctx context.Context, chatID string) ([]domain.ChatMem
 	return out, rows.Err()
 }
 
+func (c *ChatRepo) MembersWithJoin(ctx context.Context, chatID string) ([]domain.ChatMemberWithJoin, error) {
+	rows, err := c.r.pool.Query(ctx, `
+		SELECT cm.user_id::text, u.username, cm.role, cm.joined_at
+		FROM chat_members cm JOIN users u ON u.id = cm.user_id
+		WHERE cm.chat_id = $1 ORDER BY cm.joined_at`, chatID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []domain.ChatMemberWithJoin
+	for rows.Next() {
+		var m domain.ChatMemberWithJoin
+		if err := rows.Scan(&m.UserID, &m.Username, &m.Role, &m.JoinedAt); err != nil {
+			return nil, err
+		}
+		out = append(out, m)
+	}
+	return out, rows.Err()
+}
+
 func (c *ChatRepo) MemberIDs(ctx context.Context, chatID string) ([]string, error) {
 	rows, err := c.r.pool.Query(ctx, `SELECT user_id::text FROM chat_members WHERE chat_id = $1`, chatID)
 	if err != nil {

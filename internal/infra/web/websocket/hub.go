@@ -230,7 +230,9 @@ func (h *Hub) Register(c *Client) { h.register <- c }
 
 // AwaitRegistered blocks until the Run goroutine has processed this client's
 // registration. Without it, autoJoinRooms/broadcast could race the map update.
-func (h *Hub) AwaitRegistered(c *Client, done chan<- struct{}) { h.registered <- regItem{client: c, done: done} }
+func (h *Hub) AwaitRegistered(c *Client, done chan<- struct{}) {
+	h.registered <- regItem{client: c, done: done}
+}
 
 // HandleConn runs readPump for a client; writePump is implicit via send().
 func (h *Hub) HandleConn(ctx context.Context, conn *websocket.Conn, userID string) {

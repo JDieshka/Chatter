@@ -72,6 +72,14 @@ function initials(name) {
   return name.trim().charAt(0).toUpperCase();
 }
 
+function fmtDate(iso) {
+  try {
+    const d = new Date(iso);
+    return d.toLocaleDateString('ru-RU', { day: '2-digit', month: 'long', year: 'numeric' })
+      + ' ' + d.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
+  } catch (e) { return ''; }
+}
+
 function fmtTime(iso) {
   try {
     const d = new Date(iso);

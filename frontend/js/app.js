@@ -186,6 +186,8 @@ async function openChat(chatID) {
   if (currentChat) currentChat.unread_count = 0;
   renderChatList();
   $('chat-title').textContent = chatDisplayName(currentChat);
+  const infoBtn = $('chat-info-btn');
+  if (infoBtn) infoBtn.style.display = '';
   $('msg-input').disabled = false;
   $('msg-input').focus();
 
@@ -201,6 +203,49 @@ async function openChat(chatID) {
     $('chat-messages').innerHTML = '<div class="messages-hint">Не удалось загрузить историю: ' + esc(e.message) + '</div>';
   }
   WS.join(chatID);
+}
+
+
+// ---------- Информация о чате ----------
+async function openChatInfo() {
+  if (!currentChat) return;
+  $('chat-info-error').textContent = '';
+  $('chat-info-title').textContent = chatDisplayName(currentChat);
+  $('chat-info-body').innerHTML = '<div class="messages-hint">Загрузка…</div>';
+  openModal('chat-info');
+  try {
+    const info = await API.getChatInfo(currentChat.id);
+    $('chat-info-body').innerHTML = chatInfoHTML(info);
+  } catch (e) {
+    $('chat-info-error').textContent = 'Не удалось загрузить информацию: ' + e.message;
+    $('chat-info-body').innerHTML = '';
+  }
+}
+
+function chatInfoHTML(info) {
+  const typeLabel = info.type === 'group' ? 'Групповой чат' : 'Приватный чат';
+  const creatorName = info.creator ? info.creator.username : '—';
+  let html = `<div class="chat-info-meta">
+      Тип: <b>${esc(typeLabel)}</b><br>`;
+  if (info.title) html += `Название: <b>${esc(info.title)}</b><br>`;
+  html += `Создатель: <b>${esc(creatorName)}</b><br>
+      Создан: <b>${fmtDate(info.created_at)}</b><br>
+      Участников: <b>${info.member_count}</b>
+    </div>
+    <div class="chat-info-section-title">Участники</div>`;
+  html += (info.members || []).map(m => {
+    let tag = '';
+    if (m.is_creator) tag = '<span class="member-tag creator">создатель</span>';
+    else if (m.role === 'admin') tag = '<span class="member-tag admin">админ</span>';
+    const me = currentUser && m.user_id === currentUser.id ? ' (вы)' : '';
+    return `<div class="chat-member-row">
+      <div class="chat-member-avatar">${esc(initials(m.username))}</div>
+      <div class="chat-member-name">#${esc(m.username)}${esc(me)}</div>
+      <div class="chat-member-joined">${fmtDate(m.joined_at)}</div>
+      ${tag}
+    </div>`;
+  }).join('');
+  return html;
 }
 
 // Подгрузка более ранней истории по курсору before (id самого раннего загруженного сообщения)

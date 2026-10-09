@@ -80,7 +80,10 @@
         </div>
 
         <div class="chat-area">
-          <div class="chat-title" id="chat-title">Выберите чат</div>
+          <div class="chat-title-bar">
+            <div class="chat-title" id="chat-title">Выберите чат</div>
+            <button class="icon-btn chat-info-btn" id="chat-info-btn" title="Информация о чате" onclick="openChatInfo()" style="display:none;">ℹ</button>
+          </div>
           <div class="chat-messages" id="chat-messages"></div>
           <div class="chat-input-area">
             <input type="text" class="chat-input" id="msg-input" placeholder="Написать сообщение..." disabled>
@@ -166,6 +169,17 @@
 </div>
 
 <!-- ===== MODAL: новый чат ===== -->
+<div class="modal-overlay" id="modal-chat-info">
+  <div class="modal">
+    <div class="modal-title" id="chat-info-title">Информация о чате</div>
+    <div id="chat-info-body" class="chat-info-body"></div>
+    <div class="form-error" id="chat-info-error"></div>
+    <div class="modal-actions">
+      <button class="modal-btn secondary" onclick="closeModal('chat-info')">Закрыть</button>
+    </div>
+  </div>
+</div>
+
 <div class="modal-overlay" id="modal-add-channel">
   <div class="modal">
     <div class="modal-title">Новый чат</div>
