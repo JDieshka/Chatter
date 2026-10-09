@@ -25,11 +25,15 @@ function switchAuthTab(tab) {
   }
 }
 
+// Переключение вкладок ЧАТЫ / ГОЛОСОВЫЕ ЧАТЫ. activeTab задаётся в app.js —
+// от него зависит, какие элементы рендерит список чатов и область сообщений.
 function switchAppTab(tab) {
   const chatsView = document.getElementById('view-chats');
   const voiceView = document.getElementById('view-voice');
   const chatsBtn = document.getElementById('app-tab-chats');
   const voiceBtn = document.getElementById('app-tab-voice');
+
+  if (typeof activeTab !== 'undefined') activeTab = tab;
 
   if (tab === 'chats') {
     chatsView.style.display = 'flex';
@@ -42,6 +46,18 @@ function switchAppTab(tab) {
     voiceBtn.classList.add('active-purple');
     chatsBtn.classList.remove('active-cyan');
   }
+
+  // Перерисовать активный список и участников под новую вкладку.
+  if (typeof renderChatList === 'function') renderChatList();
+  if (typeof renderVoiceParticipants === 'function') renderVoiceParticipants();
+}
+
+// Предвыбор типа в модалке создания чата (кнопка «Создать комнату +»).
+function setChatType(type) {
+  const sel = document.getElementById('new-chat-type');
+  if (!sel) return;
+  sel.value = type;
+  if (typeof onChatTypeChange === 'function') onChatTypeChange();
 }
 
 function openModal(id) {

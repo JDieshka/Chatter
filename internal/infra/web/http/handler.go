@@ -82,6 +82,7 @@ func (h *Handler) RegisterRoutes(r chi.Router) {
 			priv.Get("/chats", h.listChats)
 			priv.Post("/chats/private", h.createPrivateChat)
 			priv.Post("/chats/group", h.createGroupChat)
+			priv.Post("/chats/voice", h.createVoiceRoom)
 			priv.Route("/chats/{id}", func(c chi.Router) {
 				c.Get("/", h.getChat)
 				c.Get("/info", h.getChatInfo)
@@ -230,6 +231,26 @@ func (h *Handler) createGroupChat(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	// Notify invited members' other sessions in real time about the new group.
+	h.chat.NotifyChatCreated(r.Context(), chat.ID, currentUserID(r), chat)
+	writeJSON(w, http.StatusCreated, chat)
+}
+
+// createVoiceRoom creates a voice chat room (type "voice"). Same request body
+// as for group chats: {title, member_usernames}.
+func (h *Handler) createVoiceRoom(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		Title           string   `json:"title"`
+		MemberUsernames []string `json:"member_usernames"`
+	}
+	if err := decode(r, &req); err != nil {
+		h.respondErr(w, r, domain.ErrInvalidInput)
+		return
+	}
+	chat, err := h.chat.CreateVoiceRoom(r.Context(), currentUserID(r), req.Title, req.MemberUsernames)
+	if err != nil {
+		h.respondErr(w, r, err)
+		return
+	}
 	h.chat.NotifyChatCreated(r.Context(), chat.ID, currentUserID(r), chat)
 	writeJSON(w, http.StatusCreated, chat)
 }

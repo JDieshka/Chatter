@@ -111,6 +111,43 @@ func (uc *ChatUsecase) CreateGroupChat(ctx context.Context, userID, title string
 	return chat, nil
 }
 
+// CreateVoiceRoom creates a voice chat room. Structurally it is the same as a
+// group chat (creator becomes admin, optional initial members), but with type
+// "voice". Text messaging works in it out of the box; audio itself will be
+// layered on later via WebRTC signalling over the existing WebSocket.
+func (uc *ChatUsecase) CreateVoiceRoom(ctx context.Context, userID, title string, memberUsernames []string) (*domain.Chat, error) {
+	title = strings.TrimSpace(title)
+	if title == "" || len(title) > 255 {
+		return nil, fmt.Errorf("%w: title must be 1-255 characters", domain.ErrInvalidInput)
+	}
+	members := []domain.ChatMember{{UserID: userID, Role: domain.RoleAdmin}}
+	seen := map[string]bool{userID: true}
+	for _, name := range memberUsernames {
+		u, err := uc.users.GetByUsername(ctx, strings.TrimSpace(name))
+		if err != nil {
+			if errors.Is(err, domain.ErrNotFound) {
+				return nil, fmt.Errorf("%w: user %q not found", domain.ErrInvalidInput, name)
+			}
+			return nil, err
+		}
+		if seen[u.ID] {
+			continue
+		}
+		seen[u.ID] = true
+		members = append(members, domain.ChatMember{UserID: u.ID, Role: domain.RoleMember})
+	}
+	chat := &domain.Chat{Type: domain.ChatTypeVoice, Title: &title, CreatedBy: userID}
+	if err := uc.chats.Create(ctx, chat, members); err != nil {
+		return nil, err
+	}
+	ms, err := uc.chats.Members(ctx, chat.ID)
+	if err != nil {
+		return nil, err
+	}
+	chat.Members = ms
+	return chat, nil
+}
+
 func (uc *ChatUsecase) ListChats(ctx context.Context, userID string) ([]domain.ChatWithLastMessage, error) {
 	return uc.chats.ListByUser(ctx, userID)
 }

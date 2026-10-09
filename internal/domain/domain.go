@@ -10,6 +10,7 @@ import (
 const (
 	ChatTypePrivate = "private"
 	ChatTypeGroup   = "group"
+	ChatTypeVoice   = "voice"
 )
 
 // Member roles.

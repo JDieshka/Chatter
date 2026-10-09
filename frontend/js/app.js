@@ -138,13 +138,13 @@ async function loadChats() {
   renderChatList();
 }
 
-// Отображаемое имя чата: для private — ник собеседника, для group — title.
+// Отображаемое имя чата: для private — ник собеседника, для group/voice — title.
 function chatDisplayName(chat) {
   if (chat.type === 'private') {
     const peer = (chat.members || []).find(m => m.user_id !== (currentUser && currentUser.id));
     return peer ? peer.username : 'Личный чат';
   }
-  return chat.title || 'Группа';
+  return chat.title || (chat.type === 'voice' ? 'Голосовая комната' : 'Группа');
 }
 
 // ID собеседника в приватном чате (для открытия профиля по клику).
@@ -154,13 +154,39 @@ function chatPeerID(chat) {
   return peer ? peer.user_id : '';
 }
 
+// Активные элементы области чата зависят от текущей вкладки (ЧАТЫ / ГОЛОСОВЫЕ ЧАТЫ),
+// чтобы одна и та же логика работала для обоих списков.
+let activeTab = 'chats';
+
+function chatEls() {
+  if (activeTab === 'voice') {
+    return {
+      list: 'voice-list', title: 'voice-title', infoBtn: 'voice-info-btn',
+      messages: 'voice-messages', input: 'voice-msg-input', participants: 'voice-participants',
+    };
+  }
+  return {
+    list: 'chat-list', title: 'chat-title', infoBtn: 'chat-info-btn',
+    messages: 'chat-messages', input: 'msg-input', participants: null,
+  };
+}
+
+// Разделить общий массив чатов по вкладкам.
+function textChats()  { return chats.filter(c => c.type !== 'voice'); }
+function voiceChats() { return chats.filter(c => c.type === 'voice'); }
+
 function renderChatList() {
-  const list = $('chat-list');
-  if (!chats.length) {
-    list.innerHTML = '<div class="chat-list-empty">Чатов пока нет.<br>Нажмите «Добавить +».</div>';
+  const els = chatEls();
+  const list = $(els.list);
+  const items = activeTab === 'voice' ? voiceChats() : textChats();
+  if (!items.length) {
+    list.innerHTML = activeTab === 'voice'
+      ? '<div class="chat-list-empty">Голосовых комнат пока нет.<br>Нажмите «Создать комнату +».</div>'
+      : '<div class="chat-list-empty">Чатов пока нет.<br>Нажмите «Добавить +».</div>';
+    if (activeTab === 'voice') renderVoiceParticipants();
     return;
   }
-  list.innerHTML = chats.map(c => {
+  list.innerHTML = items.map(c => {
     const active = currentChat && currentChat.id === c.id ? ' active' : '';
     const name = chatDisplayName(c);
     // Превью: текст последнего сообщения (сохранённый локально или с сервера),
@@ -177,8 +203,10 @@ function renderChatList() {
       : '';
     const peerId = chatPeerID(c);
     const avAttr = peerId ? ` onclick="event.stopPropagation(); openUserProfile('${peerId}')" title="Профиль пользователя"` : '';
+    // Значок типа для голосовых комнат — микрофон поверх аватарки.
+    const typeIcon = c.type === 'voice' ? '<div class="type-icon">🎤</div>' : '';
     return `<div class="chat-item${active}" onclick="openChat('${c.id}')">
-      <div class="chat-avatar"${avAttr}>${esc(initials(name))}${badge}</div>
+      <div class="chat-avatar"${avAttr}>${esc(initials(name))}${badge}${typeIcon}</div>
       <div class="chat-info">
         <div class="chat-name">${esc(name)}</div>
         <div class="chat-preview" title="${esc(content)}">${esc(previewText)}</div>
@@ -191,14 +219,20 @@ function renderChatList() {
 async function openChat(chatID) {
   currentChat = chats.find(c => c.id === chatID) || null;
   if (!currentChat) return;
+  // Открыли голосовую комнату из общего списка — переключаем на её вкладку.
+  const wantTab = currentChat.type === 'voice' ? 'voice' : 'chats';
+  if (wantTab !== activeTab) switchAppTab(wantTab);
   clearUnread(chatID);
   if (currentChat) currentChat.unread_count = 0;
   renderChatList();
-  $('chat-title').textContent = chatDisplayName(currentChat);
-  const infoBtn = $('chat-info-btn');
+  const els = chatEls();
+  $(els.title).textContent = chatDisplayName(currentChat);
+  const infoBtn = $(els.infoBtn);
   if (infoBtn) infoBtn.style.display = '';
-  $('msg-input').disabled = false;
-  $('msg-input').focus();
+  const input = $(els.input);
+  input.disabled = false;
+  input.focus();
+  renderVoiceParticipants();
 
   oldestMsgId = 0;
   hasMore = false;
@@ -209,9 +243,34 @@ async function openChat(chatID) {
     if (msgs.length) oldestMsgId = page.next_before || msgs[0].id;
     renderMessages(msgs);
   } catch (e) {
-    $('chat-messages').innerHTML = '<div class="messages-hint">Не удалось загрузить историю: ' + esc(e.message) + '</div>';
+    $(els.messages).innerHTML = '<div class="messages-hint">Не удалось загрузить историю: ' + esc(e.message) + '</div>';
   }
   WS.join(chatID);
+}
+
+// Участники открытой голосовой комнаты (карточки под заголовком).
+function renderVoiceParticipants() {
+  if (activeTab !== 'voice') return;
+  const box = $('voice-participants');
+  if (!box) return;
+  if (!currentChat || currentChat.type !== 'voice') {
+    box.innerHTML = '<div class="messages-hint">Выберите комнату слева.</div>';
+    return;
+  }
+  const members = (currentChat.members || []).map(m => {
+    const me = currentUser && m.user_id === currentUser.id;
+    const isAdmin = m.role === 'admin' || (!!currentChat.created_by && m.user_id === currentChat.created_by);
+    const tag = isAdmin ? '<span class="member-tag admin">' + ((!!currentChat.created_by && m.user_id === currentChat.created_by) ? 'создатель' : 'админ') + '</span>' : '';
+    return `<div class="participant-card" onclick="openUserProfile('${m.user_id}')" title="Профиль пользователя">
+      <div class="participant-avatar-large">${esc(initials(m.username))}</div>
+      <div class="participant-name">#${esc(m.username)}${me ? ' (вы)' : ''}</div>
+      ${tag}
+    </div>`;
+  }).join('');
+  box.innerHTML = `
+    <div class="voice-room-title">🎤 ${esc(chatDisplayName(currentChat))}</div>
+    <div class="voice-slots-hint">Голосовое подключение появится в следующем обновлении — сейчас комната работает как чат с участниками.</div>
+    ${members}`;
 }
 
 
@@ -232,7 +291,8 @@ async function openChatInfo() {
 }
 
 function chatInfoHTML(info) {
-  const typeLabel = info.type === 'group' ? 'Групповой чат' : 'Приватный чат';
+  const typeLabel = info.type === 'group' ? 'Групповой чат'
+    : info.type === 'voice' ? 'Голосовая комната' : 'Приватный чат';
   const creatorName = info.creator ? info.creator.username : '—';
   let html = `<div class="chat-info-meta">
       Тип: <b>${esc(typeLabel)}</b><br>`;
@@ -338,7 +398,7 @@ async function loadOlderMessages() {
 }
 
 function prependMessages(msgs) {
-  const box = $('chat-messages');
+  const box = $(chatEls().messages);
   const prevHeight = box.scrollHeight;
   const hint = box.querySelector('.messages-hint');
   if (hint) hint.remove();
@@ -372,7 +432,7 @@ function messageHTML(m) {
 function renderMessages(msgs) {
   seenMsgIDs.clear();
   msgs.forEach(m => { if (m.id) seenMsgIDs.add(m.id); });
-  const box = $('chat-messages');
+  const box = $(chatEls().messages);
   if (!msgs.length) {
     box.innerHTML = '<div class="messages-hint">Сообщений пока нет — напишите первое!</div>';
     return;
@@ -383,7 +443,7 @@ function renderMessages(msgs) {
 
 function appendMessage(m) {
   if (m.id && document.getElementById('msg-' + m.id)) return; // уже показан
-  const box = $('chat-messages');
+  const box = $(chatEls().messages);
   const hint = box.querySelector('.messages-hint');
   if (hint) hint.remove();
   box.insertAdjacentHTML('beforeend', messageHTML(m));
@@ -392,7 +452,7 @@ function appendMessage(m) {
 
 // ---------- Отправка сообщений ----------
 async function sendCurrentMessage() {
-  const input = $('msg-input');
+  const input = $(chatEls().input);
   const text = input.value.trim();
   if (!text || !currentChat) return;
   input.value = '';
@@ -409,17 +469,17 @@ async function sendCurrentMessage() {
   }
 }
 
-// Enter в поле ввода — отправка
+// Enter в поле ввода — отправка (оба поля: обычное и голосовой комнаты)
 document.addEventListener('keydown', (e) => {
-  if (e.key === 'Enter' && e.target && e.target.id === 'msg-input') {
+  if (e.key === 'Enter' && e.target && (e.target.id === 'msg-input' || e.target.id === 'voice-msg-input')) {
     e.preventDefault();
     sendCurrentMessage();
   }
 });
 
-// Подгрузка истории при прокрутке к самому верху
+// Подгрузка истории при прокрутке к самому верху (любая из двух областей)
 document.addEventListener('scroll', (e) => {
-  if (e.target && e.target.id === 'chat-messages' && e.target.scrollTop < 40) {
+  if (e.target && (e.target.id === 'chat-messages' || e.target.id === 'voice-messages') && e.target.scrollTop < 40) {
     loadOlderMessages();
   }
 }, true);
@@ -545,7 +605,8 @@ function setWsStatus(connected) {
 function onChatTypeChange() {
   const t = $('new-chat-type').value;
   $('private-fields').style.display = t === 'private' ? 'flex' : 'none';
-  $('group-fields').style.display = t === 'group' ? 'flex' : 'none';
+  // Для группового и голосового чата поля одинаковые: название + участники.
+  $('group-fields').style.display = (t === 'group' || t === 'voice') ? 'flex' : 'none';
 }
 
 async function createChat() {
@@ -559,10 +620,12 @@ async function createChat() {
       chat = await API.createPrivateChat(peer);
     } else {
       const title = $('new-group-title').value.trim();
-      if (!title) throw new Error('Укажите название группы');
+      if (!title) throw new Error('Укажите название чата');
       const members = $('new-group-members').value
         .split(',').map(s => s.trim()).filter(Boolean);
-      chat = await API.createGroupChat(title, members);
+      chat = type === 'voice'
+        ? await API.createVoiceRoom(title, members)
+        : await API.createGroupChat(title, members);
     }
     closeModal('add-channel');
     $('new-peer').value = '';

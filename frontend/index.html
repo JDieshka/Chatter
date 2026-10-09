@@ -94,11 +94,34 @@
         </div>
       </div>
 
-      <!-- Voice Chats View (в разработке) -->
+      <!-- Voice Chats View: голосовые комнаты (текст + участники; аудио — следующий этап) -->
       <div id="view-voice" style="display:none;flex:1;">
-        <div class="voice-placeholder">
-          <div class="voice-placeholder-title">ГОЛОСОВЫЕ ЧАТЫ</div>
-          <p>Раздел находится в разработке.<br>Текстовые чаты и real-time сообщения уже доступны во вкладке «ЧАТЫ».</p>
+        <div class="chat-sidebar voice-sidebar">
+          <div class="chat-list" id="voice-list"><!-- заполняется из API --></div>
+          <div class="sidebar-footer">
+            <button class="add-btn" onclick="openModal('add-channel'); setChatType('voice')">
+              Создать комнату <span class="plus">+</span>
+            </button>
+          </div>
+        </div>
+
+        <div class="chat-area">
+          <div class="chat-title-bar">
+            <div class="chat-title" id="voice-title">Выберите голосовую комнату</div>
+            <button class="icon-btn chat-info-btn" id="voice-info-btn" title="Информация о комнате" onclick="openChatInfo()" style="display:none;">ℹ</button>
+          </div>
+          <div class="voice-participants" id="voice-participants"></div>
+          <div class="voice-controls">
+            <button class="voice-control-btn" disabled title="Подключиться к голосу — скоро">🎤</button>
+            <button class="voice-control-btn" disabled title="Демонстрация экрана — скоро">🖥</button>
+          </div>
+          <div class="chat-messages" id="voice-messages"></div>
+          <div class="chat-input-area">
+            <input type="text" class="chat-input" id="voice-msg-input" placeholder="Написать сообщение..." disabled>
+            <div class="chat-input-icons">
+              <button class="icon-btn" onclick="sendCurrentMessage()">➤</button>
+            </div>
+          </div>
         </div>
       </div>
     </div>
@@ -208,6 +231,7 @@
       <select class="form-input" id="new-chat-type" onchange="onChatTypeChange()">
         <option value="private">Приватный (с пользователем)</option>
         <option value="group">Групповой</option>
+        <option value="voice">Голосовая комната</option>
       </select>
       <div id="private-fields">
         <span class="form-label">Никнейм пользователя</span>
