@@ -157,9 +157,9 @@ func (uc *ChatUsecase) GetChatInfo(ctx context.Context, chatID, userID string) (
 		})
 	}
 	info.MemberCount = len(info.Members)
-	if u, err := uc.users.GetByID(ctx, chat.CreatedBy); err == nil {
+	if u, err := uc.users.GetByID(ctx, chat.CreatedBy); err == nil && u != nil {
 		u.PasswordHash = ""
-		info.Creator = &u
+		info.Creator = u
 	}
 	return info, nil
 }
