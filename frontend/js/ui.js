@@ -3,10 +3,7 @@
 function showPage(pageId) {
   document.querySelectorAll('.page-view').forEach(p => p.classList.remove('active'));
   const page = document.getElementById('page-' + pageId);
-  if (page) {
-    page.classList.add('active');
-    page.style.display = 'flex';
-  }
+  if (page) page.classList.add('active');
 }
 
 function switchAuthTab(tab) {

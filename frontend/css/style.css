@@ -16,14 +16,18 @@
   box-sizing: border-box;
 }
 
+html, body {
+  height: 100%;
+}
+
 body {
   font-family: 'Inter', sans-serif;
-  background: var(--bg);
+  background: var(--white);
   min-height: 100vh;
   display: flex;
   justify-content: center;
-  align-items: flex-start;
-  padding: 20px;
+  align-items: stretch;
+  padding: 0;
 }
 
 .pixel-font {
@@ -169,16 +173,27 @@ body {
 }
 
 /* ===== MAIN APP ===== */
+/* Приложение занимает весь экран: без рамок, скруглений и отступов. */
 .app-container {
   width: 100%;
-  max-width: 1100px;
-  min-height: 700px;
+  max-width: none;
+  height: 100vh;
+  min-height: 0;
   background: var(--white);
-  border: 3px solid var(--border);
-  border-radius: 12px;
+  border: none;
+  border-radius: 0;
   display: flex;
   flex-direction: column;
   overflow: hidden;
+}
+
+/* Второстепенные страницы — карточкой по центру */
+.modal.modal-wide {
+  width: 480px;
+}
+
+.profile-header-section {
+  margin-top: 4px;
 }
 
 .app-header {
@@ -581,12 +596,23 @@ body {
 /* ===== PAGE VIEWS ===== */
 .page-view {
   display: none;
-  width: 100%;
-  justify-content: center;
 }
 
 .page-view.active {
   display: flex;
+  width: 100%;
+}
+
+#page-auth.active {
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  background: var(--bg);
+}
+
+/* Приложение — на весь экран */
+#page-app.active {
+  height: 100vh;
 }
 
 /* ===== MODAL ===== */

@@ -43,17 +43,17 @@
   </div>
 </div>
 
-<!-- ===== APP - CHATS PAGE ===== -->
-<div class="page-view" id="page-app" style="flex-direction:column;">
-  <div class="app-container" style="min-height:700px;">
+<!-- ===== APP - CHATS PAGE (полноэкранное приложение) ===== -->
+<div class="page-view" id="page-app">
+  <div class="app-container">
     <div class="app-header">
       <div class="header-logo">MIN</div>
       <div class="header-nav">
-        <a onclick="showPage('about')">о нас</a>
-        <a onclick="showPage('settings')">настройки</a>
+        <a onclick="openModal('about')">о нас</a>
+        <a onclick="openModal('settings')">настройки</a>
         <a onclick="doLogout()">выход</a>
       </div>
-      <div class="header-profile" onclick="showPage('profile')">
+      <div class="header-profile" onclick="openModal('profile')" title="Открыть профиль">
         <div class="header-profile-info">
           профиль<br>
           <span style="color:var(--pink)" id="hdr-nickname">#никнейм</span>
@@ -102,104 +102,65 @@
   </div>
 </div>
 
-<!-- ===== PROFILE PAGE ===== -->
-<div class="page-view" id="page-profile" style="flex-direction:column;align-items:center;">
-  <div class="app-container" style="max-width:700px;">
-    <div class="app-header">
-      <div class="header-logo">MIN</div>
-      <div class="header-nav">
-        <a onclick="showPage('about')">о нас</a>
-        <a onclick="showPage('settings')">настройки</a>
-        <a onclick="showPage('app')">чаты</a>
-      </div>
-      <div class="header-profile" onclick="showPage('profile')">
-        <div class="header-profile-info">
-          профиль<br>
-          <span style="color:var(--pink)" id="prof-hdr-nickname">#никнейм</span>
-        </div>
-        <div class="header-profile-avatar" id="prof-hdr-avatar"></div>
+<!-- ===== MODAL: профиль ===== -->
+<div class="modal-overlay" id="modal-profile">
+  <div class="modal modal-wide">
+    <div class="modal-title">Профиль</div>
+    <div class="profile-header-section">
+      <div class="profile-avatar-large" id="profile-avatar"></div>
+      <div class="profile-details">
+        <h2 id="profile-name">—</h2>
+        <div class="nickname" id="profile-nick">—</div>
       </div>
     </div>
-    <div style="padding:30px;">
-      <div class="profile-header-section">
-        <div class="profile-avatar-large" id="profile-avatar"></div>
-        <div class="profile-details">
-          <h2 id="profile-name">—</h2>
-          <div class="nickname" id="profile-nick">—</div>
-        </div>
+    <div class="profile-form">
+      <div class="form-group">
+        <label>Никнейм</label>
+        <input type="text" id="profile-username" readonly>
       </div>
-      <div class="profile-form">
-        <div class="form-group">
-          <label>Никнейм</label>
-          <input type="text" id="profile-username" readonly>
-        </div>
-        <div class="form-group">
-          <label>Email</label>
-          <input type="email" id="profile-email" readonly placeholder="не указан">
-        </div>
+      <div class="form-group">
+        <label>Email</label>
+        <input type="email" id="profile-email" readonly placeholder="не указан">
       </div>
+    </div>
+    <div class="modal-actions">
+      <button class="modal-btn secondary" onclick="closeModal('profile')">Закрыть</button>
     </div>
   </div>
 </div>
 
-<!-- ===== ABOUT PAGE ===== -->
-<div class="page-view" id="page-about" style="flex-direction:column;align-items:center;">
-  <div class="app-container" style="max-width:700px;">
-    <div class="app-header">
-      <div class="header-logo">MIN</div>
-      <div class="header-nav">
-        <a onclick="showPage('about')">о нас</a>
-        <a onclick="showPage('settings')">настройки</a>
-        <a onclick="showPage('app')">чаты</a>
-      </div>
-      <div class="header-profile" onclick="showPage('profile')">
-        <div class="header-profile-info">
-          профиль<br>
-          <span style="color:var(--pink)" id="about-hdr-nickname">#никнейм</span>
-        </div>
-        <div class="header-profile-avatar" id="about-hdr-avatar"></div>
-      </div>
-    </div>
-    <div style="padding:40px;text-align:center;">
-      <div class="auth-logo" style="font-size:48px;margin-bottom:20px;">MIN</div>
-      <p style="font-size:16px;line-height:1.8;color:#444;max-width:500px;margin:0 auto;">
+<!-- ===== MODAL: о нас ===== -->
+<div class="modal-overlay" id="modal-about">
+  <div class="modal modal-wide">
+    <div class="modal-title">О нас</div>
+    <div style="text-align:center;">
+      <div class="auth-logo" style="font-size:40px;margin-bottom:16px;">MIN</div>
+      <p style="font-size:15px;line-height:1.8;color:#444;">
         MIN — это платформа для общения в текстовых чатах в реальном времени.
         Создавайте приватные и групповые чаты, приглашайте друзей и переписывайтесь.
       </p>
-      <div style="margin-top:30px;display:flex;gap:16px;justify-content:center;">
-        <div style="width:60px;height:60px;background:var(--cyan);border:3px solid var(--border);border-radius:10px;"></div>
-        <div style="width:60px;height:60px;background:var(--pink);border:3px solid var(--border);border-radius:10px;"></div>
-        <div style="width:60px;height:60px;background:var(--gray);border:3px solid var(--border);border-radius:10px;"></div>
-        <div style="width:60px;height:60px;background:var(--purple);border:3px solid var(--border);border-radius:10px;"></div>
+      <div style="margin-top:24px;display:flex;gap:16px;justify-content:center;">
+        <div style="width:48px;height:48px;background:var(--cyan);border:3px solid var(--border);border-radius:10px;"></div>
+        <div style="width:48px;height:48px;background:var(--pink);border:3px solid var(--border);border-radius:10px;"></div>
+        <div style="width:48px;height:48px;background:var(--gray);border:3px solid var(--border);border-radius:10px;"></div>
+        <div style="width:48px;height:48px;background:var(--purple);border:3px solid var(--border);border-radius:10px;"></div>
       </div>
+    </div>
+    <div class="modal-actions">
+      <button class="modal-btn secondary" onclick="closeModal('about')">Закрыть</button>
     </div>
   </div>
 </div>
 
-<!-- ===== SETTINGS PAGE ===== -->
-<div class="page-view" id="page-settings" style="flex-direction:column;align-items:center;">
-  <div class="app-container" style="max-width:700px;">
-    <div class="app-header">
-      <div class="header-logo">MIN</div>
-      <div class="header-nav">
-        <a onclick="showPage('about')">о нас</a>
-        <a onclick="showPage('settings')">настройки</a>
-        <a onclick="showPage('app')">чаты</a>
-      </div>
-      <div class="header-profile" onclick="showPage('profile')">
-        <div class="header-profile-info">
-          профиль<br>
-          <span style="color:var(--pink)" id="set-hdr-nickname">#никнейм</span>
-        </div>
-        <div class="header-profile-avatar" id="set-hdr-avatar"></div>
-      </div>
-    </div>
-    <div style="padding:30px;">
-      <h2 style="font-family:'Press Start 2P',monospace;font-size:16px;margin-bottom:24px;">настройки</h2>
-      <p style="color:#666;font-size:14px;line-height:1.6;">
-        Пользовательские настройки пока не поддерживаются сервером — этот раздел появится позже.
-      </p>
-      <button class="profile-save-btn" onclick="showPage('app')">Назад к чатам</button>
+<!-- ===== MODAL: настройки ===== -->
+<div class="modal-overlay" id="modal-settings">
+  <div class="modal modal-wide">
+    <div class="modal-title">Настройки</div>
+    <p style="color:#666;font-size:14px;line-height:1.6;">
+      Пользовательские настройки пока не поддерживаются сервером — этот раздел появится позже.
+    </p>
+    <div class="modal-actions">
+      <button class="modal-btn secondary" onclick="closeModal('settings')">Закрыть</button>
     </div>
   </div>
 </div>

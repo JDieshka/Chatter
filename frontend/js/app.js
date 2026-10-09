@@ -39,15 +39,21 @@ async function boot() {
 function renderUserHeader() {
   if (!currentUser) return;
   const nick = '#' + currentUser.username;
-  ['hdr-nickname', 'prof-hdr-nickname', 'about-hdr-nickname', 'set-hdr-nickname']
-    .forEach(id => { const el = $(id); if (el) el.textContent = nick; });
-  ['hdr-avatar', 'prof-hdr-avatar', 'about-hdr-avatar', 'set-hdr-avatar', 'profile-avatar']
-    .forEach(id => { const el = $(id); if (el) el.textContent = initials(currentUser.username); });
+  const hdr = $('hdr-nickname');
+  if (hdr) hdr.textContent = nick;
+  const hdrAv = $('hdr-avatar');
+  if (hdrAv) hdrAv.textContent = initials(currentUser.username);
 
-  $('profile-name').textContent = currentUser.username;
-  $('profile-nick').textContent = nick;
-  $('profile-username').value = currentUser.username;
-  $('profile-email').value = currentUser.email || '';
+  const pName = $('profile-name');
+  if (pName) pName.textContent = currentUser.username;
+  const pNick = $('profile-nick');
+  if (pNick) pNick.textContent = nick;
+  const pAv = $('profile-avatar');
+  if (pAv) pAv.textContent = initials(currentUser.username);
+  const pUser = $('profile-username');
+  if (pUser) pUser.value = currentUser.username;
+  const pEmail = $('profile-email');
+  if (pEmail) pEmail.value = currentUser.email || '';
 }
 
 // ---------- Auth ----------
@@ -267,15 +273,55 @@ document.addEventListener('scroll', (e) => {
 // ---------- Приём событий WebSocket ----------
 function onWSMessage(ev) {
   if (ev.type !== 'message.new') return;
+  const mine = ev.sender && currentUser && ev.sender.id === currentUser.id;
+
+  // Основной случай: собеседник сейчас открыл этот чат — добавляем в реальном времени.
   if (currentChat && ev.chat_id === currentChat.id) {
     appendMessage(ev);
+  } else if (mine) {
+    // Собственное сообщение из другого окна/вкладки, где этот чат открыт:
+    // не показываем дубль, только обновим превью списка.
+    const c = chats.find(x => x.id === ev.chat_id);
+    if (c) c.last_message_at = ev.created_at;
+    renderChatList();
+    return;
+  } else {
+    // Чат открыт в другой вкладке этого браузера — синхронизируем ленту между вкладками.
+    broadcastToOtherTabs({ kind: 'message.new', chat_id: ev.chat_id, msg: ev });
   }
-  // обновляем превью времени в списке чатов
+
+  // Обновляем превью времени и порядок чатов в списке.
   const c = chats.find(x => x.id === ev.chat_id);
   if (c) {
     c.last_message_at = ev.created_at;
-    if (!(currentChat && currentChat.id === ev.chat_id)) renderChatList();
+    chats.sort((a, b) => new Date(b.last_message_at || 0) - new Date(a.last_message_at || 0));
+    renderChatList();
   }
+}
+
+// Синхронизация состояний между вкладками одного браузера (BroadcastChannel).
+const tabSync = ('BroadcastChannel' in window) ? new BroadcastChannel('chatter-tab-sync') : null;
+
+function broadcastToOtherTabs(payload) {
+  if (tabSync) { try { tabSync.postMessage(payload); } catch (e) {} }
+}
+
+if (tabSync) {
+  tabSync.onmessage = (e) => {
+    const p = e.data;
+    if (!p) return;
+    if (p.kind === 'message.new') {
+      const c = chats.find(x => x.id === p.chat_id);
+      if (c) {
+        c.last_message_at = p.msg.created_at;
+        renderChatList();
+      }
+      // Если этот чат открыт в текущей вкладке — добавляем сообщение в ленту.
+      if (currentChat && currentChat.id === p.chat_id) appendMessage(p.msg);
+    } else if (p.kind === 'chats:updated') {
+      loadChats();
+    }
+  };
 }
 
 function setWsStatus(connected) {
@@ -323,6 +369,7 @@ async function createChat() {
     const found = chats.find(c => c.id === chat.id) || chat;
     if (!chats.find(c => c.id === chat.id)) { chats.unshift(found); renderChatList(); }
     openChat(chat.id);
+    broadcastToOtherTabs({ kind: 'chats:updated' });
   } catch (e) {
     setError('modal-error', e.message);
   }

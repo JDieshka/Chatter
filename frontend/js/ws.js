@@ -16,6 +16,8 @@ const WS = {
   open() {
     if (!API.access) return;
     this._closedByUser = false;
+    // не открываем дубликат соединения, если уже открыто/открывается
+    if (this.conn && (this.conn.readyState === WebSocket.OPEN || this.conn.readyState === WebSocket.CONNECTING)) return;
     const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
     const url = proto + '//' + location.host + '/ws?token=' + encodeURIComponent(API.access);
     try {
