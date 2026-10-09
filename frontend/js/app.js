@@ -164,9 +164,10 @@ async function openChat(chatID) {
   oldestMsgId = 0;
   hasMore = false;
   try {
-    const msgs = await API.getMessages(chatID, 0, PAGE_SIZE);
-    hasMore = msgs.length >= PAGE_SIZE;
-    if (msgs.length) oldestMsgId = msgs[0].id;
+    const page = await API.getMessages(chatID, 0, PAGE_SIZE);
+    const msgs = page.messages || [];
+    hasMore = !!page.has_more;
+    if (msgs.length) oldestMsgId = page.next_before || msgs[0].id;
     renderMessages(msgs);
   } catch (e) {
     $('chat-messages').innerHTML = '<div class="messages-hint">Не удалось загрузить историю: ' + esc(e.message) + '</div>';
@@ -178,9 +179,10 @@ async function openChat(chatID) {
 async function loadOlderMessages() {
   if (!currentChat || !hasMore || !oldestMsgId) return;
   try {
-    const msgs = await API.getMessages(currentChat.id, oldestMsgId, PAGE_SIZE);
-    hasMore = msgs.length >= PAGE_SIZE;
-    if (msgs.length) oldestMsgId = msgs[0].id;
+    const page = await API.getMessages(currentChat.id, oldestMsgId, PAGE_SIZE);
+    const msgs = page.messages || [];
+    hasMore = !!page.has_more;
+    if (msgs.length) oldestMsgId = page.next_before || msgs[0].id;
     prependMessages(msgs);
   } catch (e) {
     console.error('loadOlderMessages:', e);

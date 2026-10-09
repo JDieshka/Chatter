@@ -261,7 +261,18 @@ func (h *Handler) getMessages(w http.ResponseWriter, r *http.Request) {
 	if msgs == nil {
 		msgs = []domain.Message{}
 	}
-	writeJSON(w, http.StatusOK, msgs)
+	// Единый формат ответа с курсором пагинации:
+	// next_before — id самого раннего сообщения в выборке (0 если история пуста),
+	// has_more — признак того, что страница заполнена полностью и старше ещё есть сообщения.
+	nextBefore := int64(0)
+	if len(msgs) > 0 {
+		nextBefore = msgs[0].ID
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"messages":    msgs,
+		"next_before": nextBefore,
+		"has_more":    len(msgs) >= limit,
+	})
 }
 
 func (h *Handler) sendMessage(w http.ResponseWriter, r *http.Request) {

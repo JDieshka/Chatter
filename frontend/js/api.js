@@ -87,7 +87,8 @@ const API = {
   },
 
   // ---- Messages ----
-  // before — id самого раннего загруженного сообщения (курсор назад по истории)
+  // before — id самого раннего загруженного сообщения (курсор назад по истории).
+  // Ответ сервера: { messages: [...], next_before: <id>, has_more: bool }
   getMessages(chatId, before, limit) {
     let q = '/api/chats/' + chatId + '/messages?limit=' + (limit || 50);
     if (before) q += '&before=' + before;
