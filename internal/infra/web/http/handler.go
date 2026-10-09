@@ -78,6 +78,7 @@ func (h *Handler) RegisterRoutes(r chi.Router) {
 		api.Group(func(priv chi.Router) {
 			priv.Use(middleware.JWT(h.jwt))
 			priv.Get("/users/me", h.me)
+			priv.Get("/users/{id}", h.getUser)
 			priv.Get("/chats", h.listChats)
 			priv.Post("/chats/private", h.createPrivateChat)
 			priv.Post("/chats/group", h.createGroupChat)
@@ -157,6 +158,18 @@ func (h *Handler) me(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, u)
+}
+
+// getUser returns a public profile of any user by ID: username, registration
+// date, is_self flag and the private-chat ID with the viewer if it exists.
+// Email is never exposed here — only via /users/me.
+func (h *Handler) getUser(w http.ResponseWriter, r *http.Request) {
+	p, err := h.chat.GetPublicProfile(r.Context(), currentUserID(r), chi.URLParam(r, "id"))
+	if err != nil {
+		h.respondErr(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, p)
 }
 
 func currentUserID(r *http.Request) string {

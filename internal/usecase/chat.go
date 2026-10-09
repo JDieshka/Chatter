@@ -305,3 +305,33 @@ func (uc *ChatUsecase) NotifyChatCreated(ctx context.Context, chatID, creatorID 
 func (uc *ChatUsecase) UserByID(ctx context.Context, id string) (*domain.User, error) {
 	return uc.users.GetByID(ctx, id)
 }
+
+// PublicProfile returns a safe profile view of any user: ID, username and
+// registration date only. Email is exposed exclusively to the owner (via Me).
+type PublicProfile struct {
+	ID        string    `json:"id"`
+	Username  string    `json:"username"`
+	CreatedAt time.Time `json:"created_at"`
+	IsSelf    bool      `json:"is_self"`
+	// ChatID is a private chat with this user if one already exists ("" otherwise).
+	ChatID string `json:"chat_id,omitempty"`
+}
+
+func (uc *ChatUsecase) GetPublicProfile(ctx context.Context, viewerID, targetID string) (*PublicProfile, error) {
+	u, err := uc.users.GetByID(ctx, targetID)
+	if err != nil {
+		if errors.Is(err, domain.ErrNotFound) {
+			return nil, fmt.Errorf("%w: user not found", domain.ErrNotFound)
+		}
+		return nil, err
+	}
+	p := &PublicProfile{ID: u.ID, Username: u.Username, CreatedAt: u.CreatedAt, IsSelf: u.ID == viewerID}
+	// If the viewer already has a private chat with this user — expose its ID so
+	// the UI can offer "open chat" without creating a duplicate.
+	if !p.IsSelf {
+		if c, err := uc.chats.GetPrivateChat(ctx, viewerID, targetID); err == nil && c != nil {
+			p.ChatID = c.ID
+		}
+	}
+	return p, nil
+}

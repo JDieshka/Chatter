@@ -72,6 +72,7 @@ const API = {
 
   // ---- Users ----
   me()            { return this.call('GET', '/api/users/me'); },
+  getUser(id)     { return this.call('GET', '/api/users/' + encodeURIComponent(id)); },
 
   // ---- Chats ----
   listChats()     { return this.call('GET', '/api/chats'); },

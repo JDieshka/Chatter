@@ -147,6 +147,13 @@ function chatDisplayName(chat) {
   return chat.title || 'Группа';
 }
 
+// ID собеседника в приватном чате (для открытия профиля по клику).
+function chatPeerID(chat) {
+  if (!chat || chat.type !== 'private') return '';
+  const peer = (chat.members || []).find(m => m.user_id !== (currentUser && currentUser.id));
+  return peer ? peer.user_id : '';
+}
+
 function renderChatList() {
   const list = $('chat-list');
   if (!chats.length) {
@@ -168,8 +175,10 @@ function renderChatList() {
     const badge = unreadCount > 0
       ? `<div class="unread-badge">${unreadCount > 99 ? '99+' : unreadCount}</div>`
       : '';
+    const peerId = chatPeerID(c);
+    const avAttr = peerId ? ` onclick="event.stopPropagation(); openUserProfile('${peerId}')" title="Профиль пользователя"` : '';
     return `<div class="chat-item${active}" onclick="openChat('${c.id}')">
-      <div class="chat-avatar">${esc(initials(name))}${badge}</div>
+      <div class="chat-avatar"${avAttr}>${esc(initials(name))}${badge}</div>
       <div class="chat-info">
         <div class="chat-name">${esc(name)}</div>
         <div class="chat-preview" title="${esc(content)}">${esc(previewText)}</div>
@@ -238,7 +247,7 @@ function chatInfoHTML(info) {
     if (m.is_creator) tag = '<span class="member-tag creator">создатель</span>';
     else if (m.role === 'admin') tag = '<span class="member-tag admin">админ</span>';
     const me = currentUser && m.user_id === currentUser.id ? ' (вы)' : '';
-    return `<div class="chat-member-row">
+    return `<div class="chat-member-row" onclick="openUserProfile('${m.user_id}')" title="Профиль пользователя">
       <div class="chat-member-avatar">${esc(initials(m.username))}</div>
       <div class="chat-member-name">#${esc(m.username)}${esc(me)}</div>
       <div class="chat-member-joined">${fmtDate(m.joined_at)}</div>
@@ -246,6 +255,72 @@ function chatInfoHTML(info) {
     </div>`;
   }).join('');
   return html;
+}
+
+// ---------- Профиль пользователя (свой или чужой) ----------
+async function openUserProfile(userID) {
+  if (!userID) return;
+  // Свой ID — открываем обычный профиль с редактированием.
+  if (currentUser && userID === currentUser.id) { openModal('profile'); return; }
+
+  $('user-profile-error').textContent = '';
+  $('user-profile-name').textContent = '—';
+  $('user-profile-nick').textContent = '—';
+  $('user-profile-avatar').textContent = '?';
+  $('user-profile-since').textContent = 'Загрузка…';
+  const startBtn = $('user-profile-start-chat');
+  startBtn.style.display = 'none';
+  startBtn.dataset.chatId = '';
+  startBtn.dataset.peer = '';
+  openModal('user-profile');
+
+  try {
+    const p = await API.getUser(userID);
+    $('user-profile-name').textContent = p.username;
+    $('user-profile-nick').textContent = '#' + p.username;
+    $('user-profile-avatar').textContent = initials(p.username);
+    $('user-profile-since').textContent = 'На платформе с ' + fmtDate(p.created_at);
+    if (p.chat_id) {
+      startBtn.textContent = 'Открыть чат';
+      startBtn.dataset.chatId = p.chat_id;
+      startBtn.style.display = '';
+    } else {
+      startBtn.textContent = 'Написать сообщение';
+      startBtn.dataset.peer = p.username;
+      startBtn.style.display = '';
+    }
+  } catch (e) {
+    $('user-profile-error').textContent = 'Не удалось загрузить профиль: ' + e.message;
+  }
+}
+
+// Из модалки профиля: открыть существующий приватный чат или создать новый.
+async function userProfileStartChat() {
+  const btn = $('user-profile-start-chat');
+  const existingID = btn.dataset.chatId;
+  const peerName = btn.dataset.peer;
+  closeModal('user-profile');
+  if (existingID) {
+    // если чат уже в списке — просто открываем, иначе обновляем список
+    if (chats.some(c => c.id === existingID)) { openChat(existingID); return; }
+    await loadChats();
+    if (chats.some(c => c.id === existingID)) openChat(existingID);
+    return;
+  }
+  if (!peerName) return;
+  try {
+    const res = await API.createPrivateChat(peerName);
+    const chat = res.chat || res; // сервер может вернуть {chat:...} или сам чат
+    if (res.created !== false && !chats.some(c => c.id === chat.id)) {
+      chats.unshift(Object.assign({ unread_count: 0 }, chat));
+    }
+    await loadChats(); // актуальные поля (members, last_message) с сервера
+    const found = chats.find(c => c.id === chat.id);
+    if (found) openChat(found.id);
+  } catch (e) {
+    setError('user-profile-error', e.message);
+    openModal('user-profile');
+  }
 }
 
 // Подгрузка более ранней истории по курсору before (id самого раннего загруженного сообщения)
@@ -276,11 +351,18 @@ function messageHTML(m) {
   // у сообщений из REST нет объекта sender — сверяем по sender_id
   const isMine = outgoing || m.sender_id === (currentUser && currentUser.id);
   const who = m.sender ? m.sender.username : '';
+  const senderId = (m.sender && m.sender.id) || m.sender_id || '';
   const mid = m.id ? ` id="msg-${m.id}"` : '';
+  const avAttr = (!isMine && senderId)
+    ? ` onclick="openUserProfile('${senderId}')" title="Профиль пользователя" style="cursor:pointer;"`
+    : '';
+  const nameAttr = (!isMine && senderId)
+    ? ` onclick="openUserProfile('${senderId}')" style="cursor:pointer;"`
+    : '';
   return `<div class="message ${isMine ? 'outgoing' : 'incoming'}"${mid}>
-    <div class="message-avatar">${esc(initials(isMine ? (currentUser && currentUser.username) : who))}</div>
+    <div class="message-avatar"${avAttr}>${esc(initials(isMine ? (currentUser && currentUser.username) : who))}</div>
     <div class="message-body">
-      ${!isMine && who ? '<div class="message-sender">' + esc(who) + '</div>' : ''}
+      ${!isMine && who ? '<div class="message-sender"' + nameAttr + '>' + esc(who) + '</div>' : ''}
       <div class="message-bubble">${esc(m.content)}</div>
       <div class="message-time">${fmtTime(m.created_at)}</div>
     </div>

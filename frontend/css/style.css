@@ -922,3 +922,22 @@ body {
 .member-tag.admin {
   background: var(--cyan);
 }
+
+/* ===== Профиль пользователя (модалка) ===== */
+.profile-since {
+  font-size: 13px;
+  color: #666;
+  margin-top: 6px;
+}
+
+.chat-member-row {
+  cursor: pointer;
+}
+
+.chat-member-row:hover {
+  background: var(--cyan);
+}
+
+.message-avatar, .chat-avatar {
+  cursor: pointer;
+}

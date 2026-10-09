@@ -132,6 +132,26 @@
   </div>
 </div>
 
+<!-- ===== MODAL: профиль пользователя (чужой) ===== -->
+<div class="modal-overlay" id="modal-user-profile">
+  <div class="modal modal-wide">
+    <div class="modal-title">Профиль пользователя</div>
+    <div class="profile-header-section">
+      <div class="profile-avatar-large" id="user-profile-avatar">?</div>
+      <div class="profile-details">
+        <h2 id="user-profile-name">—</h2>
+        <div class="nickname" id="user-profile-nick">—</div>
+        <div class="profile-since" id="user-profile-since"></div>
+      </div>
+    </div>
+    <div class="form-error" id="user-profile-error"></div>
+    <div class="modal-actions">
+      <button class="modal-btn secondary" onclick="closeModal('user-profile')">Закрыть</button>
+      <button class="modal-btn primary" id="user-profile-start-chat" style="display:none;" onclick="userProfileStartChat()">Написать сообщение</button>
+    </div>
+  </div>
+</div>
+
 <!-- ===== MODAL: о нас ===== -->
 <div class="modal-overlay" id="modal-about">
   <div class="modal modal-wide">
