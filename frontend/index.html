@@ -110,9 +110,13 @@
             <div class="chat-title" id="voice-title">Выберите голосовую комнату</div>
             <button class="icon-btn chat-info-btn" id="voice-info-btn" title="Информация о комнате" onclick="openChatInfo()" style="display:none;">ℹ</button>
           </div>
+          <div class="voice-connect-bar" id="voice-connect-bar" style="display:none;">
+            <button class="voice-connect-btn" id="voice-connect-btn" onclick="toggleVoiceConnect()">🎤 Подключиться к голосу</button>
+            <span class="voice-connect-status" id="voice-connect-status"></span>
+          </div>
           <div class="voice-participants" id="voice-participants"></div>
           <div class="voice-controls">
-            <button class="voice-control-btn" disabled title="Подключиться к голосу — скоро">🎤</button>
+            <button class="voice-control-btn" id="voice-mute-btn" disabled title="Отключить микрофон">🎤</button>
             <button class="voice-control-btn" disabled title="Демонстрация экрана — скоро">🖥</button>
           </div>
           <div class="chat-messages" id="voice-messages"></div>
@@ -260,6 +264,7 @@
 <script src="js/api.js"></script>
 <script src="js/ws.js"></script>
 <script src="js/ui.js"></script>
+<script src="js/voice.js"></script>
 <script src="js/app.js"></script>
 </body>
 </html>

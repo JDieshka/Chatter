@@ -46,7 +46,7 @@ func UpgradeHandler(hub *Hub, mgr *pkgauth.Manager) http.HandlerFunc {
 				}
 			}
 		}()
-		hub.HandleConn(r.Context(), conn, claims.UserID)
+		hub.HandleConn(r.Context(), conn, claims.UserID, claims.Username)
 	}
 }
 

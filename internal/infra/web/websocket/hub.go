@@ -14,12 +14,14 @@ import (
 
 // Client is a single WebSocket connection bound to an authenticated user.
 type Client struct {
-	conn      *websocket.Conn
-	userID    string
-	mu        sync.Mutex // guards writes only — a slow client never blocks broadcast
-	rooms     map[string]bool
-	isClosing bool
-	hub       *Hub
+	conn       *websocket.Conn
+	userID     string
+	username   string
+	mu         sync.Mutex // guards writes only — a slow client never blocks broadcast
+	rooms      map[string]bool
+	isClosing  bool
+	hub        *Hub
+	voiceRooms map[string]bool // voice rooms the client is actively connected to (audio)
 }
 
 func (c *Client) send(payload []byte) {
@@ -48,9 +50,25 @@ func (c *Client) close(code websocket.StatusCode, reason string) {
 
 // IncomingEvent is a client->server WS message.
 type IncomingEvent struct {
-	Type    string `json:"type"`
-	ChatID  string `json:"chat_id"`
-	Content string `json:"content"`
+	Type         string          `json:"type"`
+	ChatID       string          `json:"chat_id"`
+	Content      string          `json:"content"`
+	Payload      json.RawMessage `json:"payload"`        // for voice.* signalling events
+	TargetUserID string          `json:"target_user_id"` // recipient of a voice.* relay
+}
+
+// OutgoingSignal is a server->client relay event (voice signalling, presence).
+// It also carries the target user for point-to-point relays: the browser-side
+// router checks it and ignores signals addressed to other peers.
+type OutgoingSignal struct {
+	Type     string          `json:"type"`
+	ChatID   string          `json:"chat_id,omitempty"`
+	UserID   string          `json:"user_id,omitempty"`  // the peer this signal came from
+	Username string          `json:"username,omitempty"` // display name of that peer
+	Action   string          `json:"action,omitempty"`   // join|leave
+	SenderID string          `json:"sender_id,omitempty"`
+	Target   string          `json:"target,omitempty"` // intended recipient user id
+	Payload  json.RawMessage `json:"payload,omitempty"`
 }
 
 // Hub owns all connections; rooms are chat_id -> clients filters over one hub.
@@ -235,8 +253,8 @@ func (h *Hub) AwaitRegistered(c *Client, done chan<- struct{}) {
 }
 
 // HandleConn runs readPump for a client; writePump is implicit via send().
-func (h *Hub) HandleConn(ctx context.Context, conn *websocket.Conn, userID string) {
-	c := &Client{conn: conn, userID: userID, rooms: make(map[string]bool), hub: h}
+func (h *Hub) HandleConn(ctx context.Context, conn *websocket.Conn, userID, username string) {
+	c := &Client{conn: conn, userID: userID, username: username, rooms: make(map[string]bool), voiceRooms: make(map[string]bool), hub: h}
 	h.Register(c)
 	// Ensure the hub goroutine actually added us before we subscribe to rooms.
 	regDone := make(chan struct{})
@@ -290,8 +308,91 @@ func (h *Hub) handleEvent(ctx context.Context, c *Client, ev IncomingEvent) {
 		}
 	case "ping":
 		c.send([]byte(`{"type":"pong"}`))
+	case "voice.join":
+		h.voiceJoin(ctx, c, ev.ChatID)
+	case "voice.leave":
+		h.voiceLeave(c, ev.ChatID)
+	case "voice.offer", "voice.answer", "voice.ice":
+		// Pure signalling relay: SDP/ICE goes to one peer in the same voice room.
+		c.mu.Lock()
+		joined := c.voiceRooms[ev.ChatID]
+		c.mu.Unlock()
+		if !joined {
+			h.voiceJoin(ctx, c, ev.ChatID) // auto-join so relays work after reconnect
+			c.mu.Lock()
+			joined = c.voiceRooms[ev.ChatID]
+			c.mu.Unlock()
+			if !joined {
+				return // access denied — error already sent by voiceJoin
+			}
+		}
+		if ev.TargetUserID == "" || len(ev.Payload) == 0 {
+			c.send(mustMarshal(usecase.OutgoingError{Type: "error", Code: "BAD_SIGNAL", Message: "target_user_id and payload are required"}))
+			return
+		}
+		h.deliver(ev.ChatID, mustMarshal(OutgoingSignal{
+			Type:     ev.Type,
+			ChatID:   ev.ChatID,
+			UserID:   c.userID,
+			Username: c.username,
+			SenderID: c.userID,
+			Target:   ev.TargetUserID,
+			Payload:  ev.Payload,
+		}))
 	default:
 		c.send(mustMarshal(usecase.OutgoingError{Type: "error", Code: "UNKNOWN_TYPE", Message: "unknown event type: " + ev.Type}))
+	}
+}
+
+// voiceJoin subscribes the client to a voice room's signalling channel and
+// notifies other connected participants (mesh WebRTC topology, MVP).
+func (h *Hub) voiceJoin(ctx context.Context, c *Client, chatID string) {
+	if chatID == "" {
+		c.send(mustMarshal(usecase.OutgoingError{Type: "error", Code: "BAD_JSON", Message: "chat_id is required"}))
+		return
+	}
+	ids, err := h.ChatUC.MemberIDs(ctx, chatID)
+	if err != nil || !contains(ids, c.userID) {
+		c.send(mustMarshal(usecase.OutgoingError{Type: "error", Code: "CHAT_NOT_FOUND", Message: "chat not found or access denied"}))
+		return
+	}
+	h.addRoomMember(c, chatID)
+	c.mu.Lock()
+	c.voiceRooms[chatID] = true
+	c.mu.Unlock()
+	// Tell existing peers a new participant arrived — they will initiate offers.
+	h.deliverExcept(chatID, mustMarshal(OutgoingSignal{
+		Type: "voice.peer.joined", ChatID: chatID, UserID: c.userID, Username: c.username, Action: "join",
+	}), c)
+}
+
+// voiceLeave unsubscribes from voice presence and notifies remaining peers.
+func (h *Hub) voiceLeave(c *Client, chatID string) {
+	c.mu.Lock()
+	joined := c.voiceRooms[chatID]
+	delete(c.voiceRooms, chatID)
+	c.mu.Unlock()
+	if !joined {
+		return
+	}
+	h.deliver(chatID, mustMarshal(OutgoingSignal{
+		Type: "voice.peer.left", ChatID: chatID, UserID: c.userID, Username: c.username, Action: "leave",
+	}))
+}
+
+// deliverExcept sends a payload to every subscriber of the room except `skip`.
+func (h *Hub) deliverExcept(chatID string, data []byte, skip *Client) {
+	h.roomsMu.RLock()
+	room := h.rooms[chatID]
+	targets := make([]*Client, 0, len(room))
+	for cl := range room {
+		if cl != skip {
+			targets = append(targets, cl)
+		}
+	}
+	h.roomsMu.RUnlock()
+	for _, cl := range targets {
+		cl.send(data)
 	}
 }
 

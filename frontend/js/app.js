@@ -104,6 +104,7 @@ async function doRegister() {
 }
 
 async function doLogout() {
+  Voice.leave(); // сброс WebRTC-подключений перед закрытием WS
   WS.close();
   await API.logout();
   currentUser = null;
@@ -214,6 +215,11 @@ function renderChatList() {
       </div>
     </div>`;
   }).join('');
+  // Подсвечиваем комнату, к голосу в которой мы подключены.
+  if (activeTab === 'voice' && Voice.roomId) {
+    const active = list.querySelector('.chat-item.active');
+    if (active) active.classList.add('voice-connected');
+  }
 }
 
 async function openChat(chatID) {
@@ -233,6 +239,7 @@ async function openChat(chatID) {
   input.disabled = false;
   input.focus();
   renderVoiceParticipants();
+  Voice.onChatSwitch(chatID); // показать/скрыть панель голосового подключения
 
   oldestMsgId = 0;
   hasMore = false;
@@ -261,15 +268,26 @@ function renderVoiceParticipants() {
     const me = currentUser && m.user_id === currentUser.id;
     const isAdmin = m.role === 'admin' || (!!currentChat.created_by && m.user_id === currentChat.created_by);
     const tag = isAdmin ? '<span class="member-tag admin">' + ((!!currentChat.created_by && m.user_id === currentChat.created_by) ? 'создатель' : 'админ') + '</span>' : '';
-    return `<div class="participant-card" onclick="openUserProfile('${m.user_id}')" title="Профиль пользователя">
+    // Статус микрофона: в сети ли участник и не замьючен ли (для себя — локальный флаг).
+    let mic = '';
+    if (me) {
+      mic = Voice.micMuted ? '🔇' : (Voice.roomId ? '🎤' : '');
+    } else if (Voice.peers.has(m.user_id)) {
+      mic = Voice.peerMuted[m.user_id] ? '🔇' : '🎤';
+    }
+    const speakingCls = (!me && Voice.speaking[m.user_id]) ? ' speaking' : '';
+    const micBadge = mic ? `<div class="mic-badge">${mic}</div>` : '';
+    return `<div class="participant-card${speakingCls}" data-uid="${m.user_id}" onclick="openUserProfile('${m.user_id}')" title="Профиль пользователя">
       <div class="participant-avatar-large">${esc(initials(m.username))}</div>
       <div class="participant-name">#${esc(m.username)}${me ? ' (вы)' : ''}</div>
-      ${tag}
+      ${tag}${micBadge}
     </div>`;
   }).join('');
   box.innerHTML = `
     <div class="voice-room-title">🎤 ${esc(chatDisplayName(currentChat))}</div>
-    <div class="voice-slots-hint">Голосовое подключение появится в следующем обновлении — сейчас комната работает как чат с участниками.</div>
+    <div class="voice-slots-hint">${Voice.roomId === currentChat.id
+      ? 'Вы в голосовом чате. Голос идёт напрямую между участниками (WebRTC P2P).'
+      : 'Нажмите «Подключиться к голосу», чтобы присоединиться к разговору.'}</div>
     ${members}`;
 }
 
@@ -517,6 +535,12 @@ function onWSMessage(ev) {
       renderChatList();
       broadcastToOtherTabs({ kind: 'chats:updated' });
     }
+    return;
+  }
+
+  // События голосового сигналинга/присутствия — обрабатывает Voice.
+  if (typeof ev.type === 'string' && ev.type.indexOf('voice.') === 0) {
+    Voice.onSignal(ev);
     return;
   }
 
