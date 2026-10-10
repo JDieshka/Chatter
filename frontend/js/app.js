@@ -605,8 +605,10 @@ function setWsStatus(connected) {
 function onChatTypeChange() {
   const t = $('new-chat-type').value;
   $('private-fields').style.display = t === 'private' ? 'flex' : 'none';
-  // Для группового и голосового чата поля одинаковые: название + участники.
-  $('group-fields').style.display = (t === 'group' || t === 'voice') ? 'flex' : 'none';
+  $('group-fields').style.display = t === 'group' ? 'flex' : 'none';
+  // Голосовая комната: только название — участников выбирать не нужно,
+  // зайти может любой пользователь.
+  $('voice-fields').style.display = t === 'voice' ? 'flex' : 'none';
 }
 
 async function createChat() {
@@ -618,19 +620,22 @@ async function createChat() {
       const peer = $('new-peer').value.trim();
       if (!peer) throw new Error('Укажите никнейм пользователя');
       chat = await API.createPrivateChat(peer);
+    } else if (type === 'voice') {
+      const title = $('new-voice-title').value.trim();
+      if (!title) throw new Error('Укажите название комнаты');
+      chat = await API.createVoiceRoom(title);
     } else {
       const title = $('new-group-title').value.trim();
       if (!title) throw new Error('Укажите название чата');
       const members = $('new-group-members').value
         .split(',').map(s => s.trim()).filter(Boolean);
-      chat = type === 'voice'
-        ? await API.createVoiceRoom(title, members)
-        : await API.createGroupChat(title, members);
+      chat = await API.createGroupChat(title, members);
     }
     closeModal('add-channel');
     $('new-peer').value = '';
     $('new-group-title').value = '';
     $('new-group-members').value = '';
+    $('new-voice-title').value = '';
     await loadChats();
     // открываем созданный чат
     const found = chats.find(c => c.id === chat.id) || chat;

@@ -136,6 +136,13 @@ body {
   background: #f0f0f0;
 }
 
+.form-hint {
+  display: block;
+  font-size: 12px;
+  color: #666;
+  margin-top: 4px;
+}
+
 .form-error {
   color: #d03050;
   font-size: 13px;

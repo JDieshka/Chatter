@@ -84,8 +84,9 @@ const API = {
   createGroupChat(title, memberUsernames) {
     return this.call('POST', '/api/chats/group', { title, member_usernames: memberUsernames });
   },
-  createVoiceRoom(title, memberUsernames) {
-    return this.call('POST', '/api/chats/voice', { title, member_usernames: memberUsernames });
+  createVoiceRoom(title) {
+    // Участники не выбираются: в голосовую комнату может зайти любой пользователь.
+    return this.call('POST', '/api/chats/voice', { title });
   },
   addMember(chatId, username) {
     return this.call('POST', '/api/chats/' + chatId + '/members', { username });
