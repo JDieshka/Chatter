@@ -50,6 +50,13 @@ function switchAppTab(tab) {
   // Перерисовать активный список и участников под новую вкладку.
   if (typeof renderChatList === 'function') renderChatList();
   if (typeof renderVoiceParticipants === 'function') renderVoiceParticipants();
+  // Синхронизировать панель голосового подключения с текущим открытым чатом
+  // (при переключении вкладок кнопка «Подключиться к голосу» должна появляться/скрываться).
+  if (typeof Voice !== 'undefined' && typeof currentChat !== 'undefined' && currentChat) {
+    Voice.onChatSwitch(currentChat.id);
+  } else if (typeof Voice !== 'undefined') {
+    Voice.onChatSwitch('');
+  }
 }
 
 // Предвыбор типа в модалке создания чата (кнопка «Создать комнату +»).

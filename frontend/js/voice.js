@@ -24,8 +24,13 @@ const Voice = {
   onChatSwitch(chatID) {
     const bar = document.getElementById('voice-connect-bar');
     if (!bar) return;
-    const chat = (window.chats || []).find(c => c.id === chatID);
-    const isVoice = chat && chat.type === 'voice';
+    // Определяем тип комнаты по текущему открытому чату (global currentChat из app.js):
+    // локальная переменная `let chats` не доступна как window.chats, поэтому
+    // обращаемся к currentChat напрямую.
+    const chat = (typeof currentChat !== 'undefined' && currentChat && currentChat.id === chatID)
+      ? currentChat
+      : (typeof chats !== 'undefined' ? (chats.find(c => c.id === chatID)) : null);
+    const isVoice = !!(chat && chat.type === 'voice');
     bar.style.display = isVoice ? 'flex' : 'none';
     this._renderBar();
   },
