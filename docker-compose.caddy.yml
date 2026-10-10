@@ -1,0 +1,29 @@
+# Overlay для включения HTTPS через Caddy.
+# Использование:
+#   docker compose -f docker-compose.yml -f docker-compose.caddy.yml up -d --build
+# Перед запуском: укажите DOMAIN=ваш_домен в файле .env и направьте A-запись домена на IP сервера.
+
+services:
+  app:
+    # Приложение слушает только внутри сети compose — наружу торчит только Caddy.
+    ports: []
+    environment:
+      - PUBLIC_URL=https://${DOMAIN}
+
+  caddy:
+    image: caddy:2-alpine
+    container_name: chatter-caddy
+    restart: unless-stopped
+    depends_on:
+      - app
+    ports:
+      - "80:80"     # нужен Let's Encrypt для HTTP-01 challenge + редирект http->https
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data          # сертификаты (переживают перезапуск)
+      - caddy_config:/config
+
+volumes:
+  caddy_data:
+  caddy_config:

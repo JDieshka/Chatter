@@ -1,0 +1,14 @@
+# Caddy reverse proxy для Chatter.
+# Домен подставляется из переменной окружения DOMAIN (см. .env / setup-https.sh).
+# Caddy автоматически получает и продлевает сертификат Let's Encrypt,
+# а также проксирует WebSocket (/ws) без дополнительных настроек.
+
+{$DOMAIN} {
+	encode gzip
+
+	handle {
+		reverse_proxy app:8080 {
+			header_up X-Forwarded-Proto https
+		}
+	}
+}
