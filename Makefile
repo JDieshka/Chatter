@@ -27,3 +27,10 @@ docker-up:
 
 docker-down:
 	docker compose down
+
+# --- HTTPS (Caddy + Let's Encrypt) ---
+https-up:
+docker compose -f docker-compose.yml -f docker-compose.caddy.yml up -d --build
+
+https-logs:
+docker compose logs caddy
