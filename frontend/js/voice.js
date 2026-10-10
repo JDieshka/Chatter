@@ -59,23 +59,39 @@ const Voice = {
   },
 
   toggleVoiceConnect() {
+    // currentChat — переменная модуля app.js (let), она НЕ доступна как window.currentChat.
+    const chat = (typeof currentChat !== 'undefined' && currentChat) || window.currentChat;
     if (this.roomId) this.leave();
-    else if (window.currentChat && window.currentChat.type === 'voice') this.join(window.currentChat.id);
+    else if (chat && chat.type === 'voice') this.join(chat.id);
   },
 
   // --- подключение ---
 
   async join(roomId) {
     if (this.roomId) this.leave();
+    const bar = document.getElementById('voice-connect-status');
+    if (bar) bar.textContent = 'Запрашиваем доступ к микрофону…';
+    let stream;
     try {
-      this.localStream = await navigator.mediaDevices.getUserMedia({
+      stream = await navigator.mediaDevices.getUserMedia({
         audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
       });
     } catch (e) {
-      alert('Не удалось получить доступ к микрофону: ' + e.message +
-        '\n(Работает только по HTTPS или на localhost)');
+      if (bar) bar.textContent = '';
+      // getUserMedia доступен только в secure context (HTTPS или localhost).
+      // На HTTP с IP-адреса VPS браузер молча блокирует микрофон — предупредим явно.
+      if (!window.isSecureContext || e.name === 'NotAllowedError' || e.name === 'NotAllowedError') {
+        alert('Браузер запретил доступ к микрофону.\n\n' +
+          'Самая частая причина: страница открыта по http:// (не защищённое соединение).\n' +
+          'Доступ к микрофону работает только по HTTPS (или на localhost).\n' +
+          'Подключите сертификат (Caddy/Nginx + Let\'s Encrypt) и откройте сайт по https://.\n\n' +
+          'Если сайт уже по HTTPS — разрешите микрофон в настройках прав сайта браузера.');
+      } else {
+        alert('Не удалось получить доступ к микрофону: ' + e.message);
+      }
       return;
     }
+    this.localStream = stream;
     this.roomId = roomId;
     this.micMuted = false;
     WS.send({ type: 'voice.join', chat_id: roomId });

@@ -269,10 +269,12 @@ function renderVoiceParticipants() {
     const isAdmin = m.role === 'admin' || (!!currentChat.created_by && m.user_id === currentChat.created_by);
     const tag = isAdmin ? '<span class="member-tag admin">' + ((!!currentChat.created_by && m.user_id === currentChat.created_by) ? 'создатель' : 'админ') + '</span>' : '';
     // Статус микрофона: в сети ли участник и не замьючен ли (для себя — локальный флаг).
+    // «В голосе» = Voice.roomId === id открытой комнаты, а не просто факт членства.
     let mic = '';
+    const inVoice = Voice.roomId && Voice.roomId === currentChat.id;
     if (me) {
-      mic = Voice.micMuted ? '🔇' : (Voice.roomId ? '🎤' : '');
-    } else if (Voice.peers.has(m.user_id)) {
+      mic = inVoice ? (Voice.micMuted ? '🔇' : '🎤') : '';
+    } else if (inVoice && Voice.peers.has(m.user_id)) {
       mic = Voice.peerMuted[m.user_id] ? '🔇' : '🎤';
     }
     const speakingCls = (!me && Voice.speaking[m.user_id]) ? ' speaking' : '';
