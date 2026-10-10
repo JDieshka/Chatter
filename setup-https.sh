@@ -1,13 +1,34 @@
 #!/usr/bin/env bash
-# Автоматическая настройка HTTPS (Caddy + Let's Encrypt) для Chatter на VPS.
-# Запуск: sudo ./setup-https.sh chat.example.com   (или без аргумента — спросит)
+# Автоматическая настройка HTTPS (Caddy) для Chatter на VPS.
+#
+# Два режима:
+#   sudo ./setup-https.sh chat.example.com   — домен: Let's Encrypt, зелёный замок в браузере
+#   sudo ./setup-https.sh                    — без домена: автоопределение публичного IP,
+#                                              самоподписанный сертификат (браузер покажет
+#                                              предупреждение — принять один раз; микрофон и wss работают)
 set -euo pipefail
 
 DOMAIN="${1:-}"
 if [[ -z "$DOMAIN" ]]; then
-  read -rp "Введите домен, указывающий на этот сервер (A-запись -> IP VPS): " DOMAIN
+  echo "Домен не указан. Варианты:"
+  echo "  1) Ввести домен (нужна A-запись на IP сервера) — Let's Encrypt, полноценный сертификат"
+  echo "  2) Оставить пустым — будет взят публичный IP этого сервера, самоподписанный сертификат"
+  read -rp "Домен [Enter = режим 2, IP]: " DOMAIN
 fi
-[[ -z "$DOMAIN" ]] && { echo "Домен не задан"; exit 1; }
+
+OVERLAY="docker-compose.caddy.yml"
+MODE="Let's Encrypt (домен)"
+if [[ -z "$DOMAIN" ]]; then
+  # Режим без домена: определяем публичный IP сервера
+  DOMAIN=$(curl -fsS --max-time 10 https://api.ipify.org || true)
+  [[ -z "$DOMAIN" ]] && { echo "[!] Не удалось определить публичный IP (нет доступа к api.ipify.org)."; exit 1; }
+  OVERLAY="docker-compose.caddy-ip.yml"
+  MODE="самоподписанный сертификат на IP ${DOMAIN}"
+  echo "[!] Это HTTP-доступ через IP. Браузер при первом заходе по https://${DOMAIN}"
+  echo "    покажет предупреждение о сертификате — нажмите 'Дополнительно' -> 'Перейти'."
+  echo "    После этого getUserMedia (микрофон) и WebSocket (wss://) будут работать."
+fi
+echo "[+] Режим: ${MODE}"
 
 cd "$(dirname "$0")"
 
@@ -36,18 +57,26 @@ if command -v ufw >/dev/null 2>&1 && ufw status | grep -q "Status: active"; then
   echo "[+] ufw: порты 80/443 открыты"
 fi
 
-# 4. Быстрая проверка DNS: домен должен резолвиться в IP этого сервера
-SERVER_IP=$(curl -fsS https://api.ipify.org || echo "")
-DOMAIN_IP=$(getent hosts "$DOMAIN" | awk '{print $1}' | head -1 || true)
-if [[ -n "$SERVER_IP" && -n "$DOMAIN_IP" && "$SERVER_IP" != "$DOMAIN_IP" ]]; then
-  echo "[!] ВНИМАНИЕ: ${DOMAIN} указывает на ${DOMAIN_IP}, а сервер — ${SERVER_IP}."
-  echo "    Направьте A-запись домена на IP сервера, иначе сертификат не будет выдан."
+# 4. Быстрая проверка DNS (только для режима с доменом): домен должен резолвиться в IP этого сервера
+if [[ "$OVERLAY" == "docker-compose.caddy.yml" ]]; then
+  SERVER_IP=$(curl -fsS https://api.ipify.org || echo "")
+  DOMAIN_IP=$(getent hosts "$DOMAIN" | awk '{print $1}' | head -1 || true)
+  if [[ -n "$SERVER_IP" && -n "$DOMAIN_IP" && "$SERVER_IP" != "$DOMAIN_IP" ]]; then
+    echo "[!] ВНИМАНИЕ: ${DOMAIN} указывает на ${DOMAIN_IP}, а сервер — ${SERVER_IP}."
+    echo "    Направьте A-запись домена на IP сервера, иначе сертификат не будет выдан."
+  fi
 fi
 
 # 5. Пересборка с overlay Caddy
-docker compose -f docker-compose.yml -f docker-compose.caddy.yml up -d --build
+docker compose -f docker-compose.yml -f "${OVERLAY}" up -d --build
 
 echo
 echo "[+] Готово. Через 1-2 минуты сайт будет доступен по https://${DOMAIN}"
+if [[ "$OVERLAY" == "docker-compose.caddy-ip.yml" ]]; then
+  echo "    Это самоподписанный сертификат: при первом заходе браузер покажет предупреждение —"
+  echo "    примите его ('Дополнительно' -> 'Перейти на сайт'), HTTPS-контекст будет работать,"
+  echo "    микрофон (getUserMedia) и wss:// станут доступны."
+  echo "    При смене IP сервера перезапустите настройку: sudo ./setup-https.sh"
+fi
 echo "    Логи выдачи сертификата: docker compose logs caddy"
-echo "    Ожидаемая строка: 'certificate obtained successfully'"
+[[ "$OVERLAY" == "docker-compose.caddy.yml" ]] && echo "    Ожидаемая строка: 'certificate obtained successfully'" || true

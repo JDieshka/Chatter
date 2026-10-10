@@ -1,0 +1,29 @@
+# Overlay для включения HTTPS через Caddy БЕЗ домена (самоподписанный сертификат на IP).
+# Использование (или проще: sudo ./setup-https.sh без аргумента):
+#   docker compose -f docker-compose.yml -f docker-compose.caddy-ip.yml up -d --build
+# В .env должен быть DOMAIN=<публичный IP сервера>, например DOMAIN=203.0.113.45
+
+services:
+  app:
+    # Приложение слушает только внутри сети compose — наружу торчит только Caddy.
+    ports: []
+    environment:
+      - PUBLIC_URL=https://${DOMAIN}
+
+  caddy:
+    image: caddy:2-alpine
+    container_name: chatter-caddy
+    restart: unless-stopped
+    depends_on:
+      - app
+    ports:
+      - "80:80"     # редирект http -> https
+      - "443:443"
+    volumes:
+      - ./Caddyfile.selfsigned:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data          # сертификаты (переживают перезапуск)
+      - caddy_config:/config
+
+volumes:
+  caddy_data:
+  caddy_config:
